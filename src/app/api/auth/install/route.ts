@@ -42,8 +42,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "invalid launch request" }, { status: 401 });
   }
 
+  // 이미 설치된 몰이면 견적 목록으로 보낸다. /demo는 설치 없이 보는 미리보기 화면이라
+  // 앱을 실행한 운영자가 연습 화면에 갇히면 안 된다.
   if ((await store.get(mallId)) && (await isTokenLive(mallId))) {
-    const res = NextResponse.redirect(new URL("/demo", req.url));
+    const res = NextResponse.redirect(new URL("/quotes", req.url));
     res.cookies.set(sessionCookie(mallId));
     return res;
   }

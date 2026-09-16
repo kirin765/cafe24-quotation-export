@@ -104,7 +104,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const res = NextResponse.redirect(new URL("/demo", req.url));
+  // 설치를 마치면 견적 목록으로 들어간다. 권한 동의만 받고 연습 화면(/demo)에 두면
+  // 저장·확정이 안 되는 줄 알고 오해한다.
+  const res = NextResponse.redirect(new URL("/quotes", req.url));
   res.cookies.set(sessionCookie(token.mall_id));
   res.cookies.delete("cq_state");
   res.cookies.delete("cq_mall");
