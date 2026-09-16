@@ -222,10 +222,18 @@ QA.md                           수동 검증표와 자동 검증 결과
 | `SUBMIT.md` | 심사 제출 절차·자기 시험·반려 사유 대응표 |
 | `store-assets/store-listing-copy.md` | 앱 이름·소개·상세 설명·연관검색어·이미지 목록 |
 | `store-assets/icon-512.png`, `icon-256.png`, `banner-740x416.png` | 아이콘·배너 |
-| `store-assets/screenshots/` | 앱 스크린샷(합성 데이터) |
-| `public/store/detail-01..05.png` | 심사용 상세 설명 이미지(1720px 디자인 PNG) |
+| `store-assets/store-registration-form.md` | 스토어 등록 폼 필드별 입력값(제품명·문구·이미지·고지·결제) |
+| `store-assets/detail-description.html` | 상세 설명에 붙여 넣는 HTML(이미지 5장, alt 포함, 폭 1240px 이하) |
+| `store-assets/screenshots/` | 앱 스크린샷(합성 데이터, 참고용) |
+| `store-assets/registration/pc-*.png` | PC 스크린샷 1920×1080 (등록 규격) |
+| `store-assets/registration/mobile-*.png` | 모바일 스크린샷 360×640 (등록 규격) |
+| `store-assets/icon-100.png`, `icon-256.png`, `icon-512.png` | 앱 아이콘 |
+| `store-assets/banner-740x416.png`(+`@2x`) | 상단 배너 |
+| `public/store/detail-01..05.png` | 심사용 상세 설명 이미지(1240px, 카페24 폭 제한 준수) |
 
-재생성: `node store-assets/render-detail-images.mjs`(서버 불필요), `node store-assets/render-screenshots.mjs`(앱 실행 필요)
+재생성: `node store-assets/render-detail-images.mjs`(서버 불필요),
+`node store-assets/render-screenshots.mjs`(참고용, 앱 실행 필요),
+`node store-assets/render-registration-images.mjs`(등록 규격 PC·모바일, 앱 실행 + `DATABASE_URL` 필요)
 
 ## 배포
 

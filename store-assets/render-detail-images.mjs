@@ -6,7 +6,7 @@ import path from "node:path";
  *
  *   node store-assets/render-detail-images.mjs
  *
- * 860px 폭을 deviceScaleFactor 2로 렌더해 1720px PNG로 저장한다.
+ * 620px 폭을 deviceScaleFactor 2로 렌더해 1240px PNG로 저장한다(카페24 상세 설명 이미지 폭 제한 1240px).
  * (순수익 앱 심사에서 텍스트 위주 상세 설명이 반려돼 이 방식으로 통과했다.)
  */
 const pw = await import("/home/giwan/Projects/reviewboost/node_modules/playwright/index.js");
@@ -22,7 +22,7 @@ const FONT = '"Noto Sans CJK KR","Noto Sans KR","Noto Sans CJK JP",system-ui,san
 const base = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: ${FONT}; color: #111827; background: #ffffff; }
-  .wrap { width: 860px; padding: 64px 56px; }
+  .wrap { width: 620px; padding: 44px 40px; }
   .eyebrow { font-size: 15px; font-weight: 700; letter-spacing: .18em; color: #2563eb; }
   h1 { font-size: 44px; line-height: 1.24; letter-spacing: -.02em; margin-top: 14px; }
   h2 { font-size: 34px; line-height: 1.3; letter-spacing: -.02em; }
@@ -163,7 +163,7 @@ const images = {
 const browser = await chromium.launch();
 
 for (const [name, markup] of Object.entries(images)) {
-  const page = await browser.newPage({ viewport: { width: 860, height: 600 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: 620, height: 520 }, deviceScaleFactor: 2 });
   await page.setContent(`<style>${base}</style>${markup}`, { waitUntil: "load" });
   const file = path.join(publicDir, `${name}.png`);
   await page.screenshot({ path: file, fullPage: true });
@@ -201,6 +201,7 @@ const browser2 = await chromium.launch();
 for (const [file, size] of [
   ["icon-512.png", 512],
   ["icon-256.png", 256],
+  ["icon-100.png", 100],
 ]) {
   const page = await browser2.newPage({
     viewport: { width: size, height: size },
@@ -212,13 +213,18 @@ for (const [file, size] of [
   await page.close();
 }
 {
-  const page = await browser2.newPage({
-    viewport: { width: 740, height: 416 },
-    deviceScaleFactor: 2,
-  });
-  await page.setContent(`<style>*{margin:0;padding:0}body{width:740px;height:416px}</style>${banner}`);
-  await page.screenshot({ path: path.join(storeDir, "banner-740x416.png") });
-  console.log("banner-740x416.png  1480x832");
-  await page.close();
+  for (const [file, scale] of [
+    ["banner-740x416.png", 1],
+    ["banner-740x416@2x.png", 2],
+  ]) {
+    const page = await browser2.newPage({
+      viewport: { width: 740, height: 416 },
+      deviceScaleFactor: scale,
+    });
+    await page.setContent(`<style>*{margin:0;padding:0}body{width:740px;height:416px}</style>${banner}`);
+    await page.screenshot({ path: path.join(storeDir, file) });
+    console.log(`${file}  ${740 * scale}x${416 * scale}`);
+    await page.close();
+  }
 }
 await browser2.close();

@@ -1,0 +1,53 @@
+<!--
+  카페24 스토어 '상세 설명' 필드에 붙여 넣는 HTML.
+  - 이미지는 1240px 이하(카페24 규칙), alt 텍스트 필수(웹 접근성)
+  - 이미지 URL은 이 앱 배포본에서 서빙된다. 도메인이 바뀌면 함께 바꾼다.
+-->
+<div style="max-width:1240px;margin:0 auto;font-family:'Noto Sans KR',system-ui,sans-serif;color:#111827;line-height:1.7">
+
+  <img src="https://cafe24-quotation-export.vercel.app/store/detail-01.png" width="1240"
+       alt="카페24 상품을 고르고 협의 단가만 확인하면 XLSX와 PDF 견적서가 만들어지는 흐름 3단계" style="max-width:100%;height:auto">
+
+  <h2 style="font-size:26px;margin:40px 0 12px">거래처에 보낼 견적서, 상품 정보를 다시 입력하고 계셨나요?</h2>
+  <p style="font-size:16px;color:#4b5563">
+    쇼핑몰에 이미 있는 상품과 옵션, 판매가를 그대로 불러옵니다. 운영자는 수량과 협의 단가만 확인해 고치면 됩니다.
+    같은 내용이 편집 가능한 XLSX와 A4 인쇄용 PDF로 함께 만들어집니다.
+  </p>
+
+  <img src="https://cafe24-quotation-export.vercel.app/store/detail-02.png" width="1240"
+       alt="상품 정보를 손으로 다시 입력하던 이전 방식과, 불러와서 확인만 하는 이후 방식 비교" style="max-width:100%;height:auto;margin-top:32px">
+
+  <h2 style="font-size:26px;margin:40px 0 12px">사용 흐름</h2>
+  <img src="https://cafe24-quotation-export.vercel.app/store/detail-03.png" width="1240"
+       alt="앱 실행, 품목 담기, 단가와 조건 확인, XLSX와 PDF로 내보내기 4단계" style="max-width:100%;height:auto">
+
+  <h2 style="font-size:26px;margin:40px 0 12px">확정한 견적은 나중에 바뀌지 않습니다</h2>
+  <img src="https://cafe24-quotation-export.vercel.app/store/detail-04.png" width="1240"
+       alt="확정 시점의 내용이 버전으로 남고, 이후 수정은 새 버전으로만 쌓이는 구조" style="max-width:100%;height:auto">
+  <p style="font-size:16px;color:#4b5563">
+    확정하면 그 시점의 공급자 정보·품목명·단가·합계를 그대로 보관합니다. 나중에 상품 가격이 바뀌어도 보낸 견적서는
+    변하지 않습니다. 두 화면에서 동시에 고치면 충돌을 알려 주고, 늦은 저장이 새 내용을 덮어쓰지 않습니다.
+  </p>
+
+  <h2 style="font-size:26px;margin:40px 0 12px">고객 개인정보는 다루지 않습니다</h2>
+  <img src="https://cafe24-quotation-export.vercel.app/store/detail-05.png" width="1240"
+       alt="고객 개인정보 미수집, 상품 조회 권한만 요청, 수식 주입 방지, 앱 삭제 시 토큰 파기" style="max-width:100%;height:auto">
+  <p style="font-size:16px;color:#4b5563">
+    구매자 이름·연락처·주소를 조회하지 않고, 고객 식별자 권한도 요청하지 않습니다. 필요한 권한은 상품 조회
+    (<code>mall.read_product</code>) 하나입니다. 견적은 주문 전 제안이며 결제 완료나 주문 생성으로 표시하지 않고,
+    세금계산서를 대신하지도 않습니다. 부가세는 자동 계산하지 않으며 ‘가격 조건’에 세금 포함 여부를 적어 둡니다.
+  </p>
+
+  <h2 style="font-size:26px;margin:40px 0 12px">파일로 가져오고 파일로 내보냅니다</h2>
+  <p style="font-size:16px;color:#4b5563">
+    품목은 상품 검색으로 담거나, 이미 쓰고 있는 파일을 그대로 올려도 됩니다. <b>.csv와 .xlsx</b>를 읽고,
+    카페24 상품 목록 엑셀·일반 견적서 양식·스마트스토어 양식의 열 이름을 알아봅니다. 행 단위 오류는 줄 번호와
+    사유를 함께 보여 주고, 잘못된 행을 조용히 버리지 않습니다. 내보낸 XLSX는 수량·단가를 고쳐도 합계가 자동
+    재계산되지 않는다는 점을 파일 안에 적어 둡니다.
+  </p>
+
+  <p style="font-size:14px;color:#6b7280;margin-top:36px">
+    문의 kwan765@naver.com · 개인정보처리방침
+    <a href="https://cafe24-quotation-export.vercel.app/privacy">cafe24-quotation-export.vercel.app/privacy</a>
+  </p>
+</div>
