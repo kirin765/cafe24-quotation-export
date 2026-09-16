@@ -15,6 +15,7 @@ import {
   type QuoteItem,
 } from "@/features/quotes/model";
 import { decodeCsvBytes, parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
+import { XlsxReadError, isOleFile, isZipFile, readXlsxRows, rowsToCsv } from "@/features/quotes/xlsx-read";
 import { downloadXlsx, openPrintWindow, recordExportEvent } from "@/features/quotes/client-export";
 import { ProductPicker } from "@/features/quotes/editor/ProductPicker";
 import { DocumentFields, ErrorText, inputClass } from "@/features/quotes/editor/DocumentFields";
@@ -178,7 +179,21 @@ export function SavedQuoteEditor({
     if (!file) {
       return;
     }
-    const { text, encoding } = decodeCsvBytes(await file.arrayBuffer());
+    const bytes = await file.arrayBuffer();
+    // 엑셀(.xlsx)은 첫 시트의 값을 읽어 CSV로 바꾼 뒤 같은 가져오기 경로를 태운다.
+    if (isZipFile(bytes) || isOleFile(bytes)) {
+      try {
+        const { rows, sheetName } = await readXlsxRows(bytes);
+        handleCsvText(rowsToCsv(rows), `${file.name} · ${sheetName} 시트`);
+      } catch (error) {
+        setImportHeaderError(
+          error instanceof XlsxReadError ? error.message : "엑셀 파일을 읽지 못했습니다.",
+        );
+        setImportWarnings([]);
+      }
+      return;
+    }
+    const { text, encoding } = decodeCsvBytes(bytes);
     handleCsvText(text, encoding === "euc-kr" ? `${file.name} (EUC-KR로 읽음)` : file.name);
   };
 
@@ -567,7 +582,7 @@ export function SavedQuoteEditor({
               </div>
             </div>
             <input
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="hidden"
               onChange={handleFileChange}
               ref={fileInputRef}
@@ -575,7 +590,8 @@ export function SavedQuoteEditor({
             />
             <p className="mt-2 text-xs text-neutral-500">
               열: item_code, product_name, option_name, quantity, unit_price · 최대 {MAX_CSV_ROWS}행 ·
-              엑셀에서 저장할 때는 &lsquo;CSV UTF-8&rsquo;을 권장합니다(EUC-KR도 자동 인식).
+              .csv와 .xlsx를 읽고, CSV는 UTF-8·EUC-KR을 자동으로 구분합니다. 구형 .xls는 .xlsx나
+              CSV로 저장해 주세요.
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               실제 파일의 열 이름도 인식합니다: 상품코드·상품명·공급가·판매가·옵션(카페24 상품 목록 양식),
@@ -604,7 +620,7 @@ export function SavedQuoteEditor({
 
             {importHeaderError ? (
               <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
-                CSV를 가져오지 않았습니다. {importHeaderError}
+                파일을 가져오지 않았습니다. {importHeaderError}
               </p>
             ) : null}
             {importWarnings.length > 0 && !importHeaderError ? (
