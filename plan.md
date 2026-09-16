@@ -2,7 +2,7 @@
 
 - 작성일: 2026-09-16
 - 프로젝트: `cafe24-quotation-export`
-- 상태: A. 로컬 데모 구현·검증 완료(2026-09-16). B·C·D 미착수
+- 상태: A 완료(2026-09-16). C 진행 중 — 설치/OAuth·토큰 저장·상품 조회까지 구현, 초안 저장·버전은 미구현. B·D 미착수
 - 담당: Giwan(제품 선택·실몰 수동 검증), 개발 세션(구현·자동 검증)
 - 첫 산출물: 상품 목록을 편집 가능한 XLSX와 전달용 PDF로 만드는 로컬 데모.
 
@@ -141,15 +141,23 @@ QA.md                        구현 시작 때 작성할 수동 검증표
 다음은 확인 과제이며 현재 가능한 API로 확정한 것이 아니다. 구현 시 [공식 Admin API](https://developers.cafe24.com/docs/en/api/admin/)와 개발자 문서를 확인한다.
 
 - [ ] 상품/옵션 조회 endpoint, 최소 scope, pagination·호출 제한·멀티몰 구분 확인.
-- [ ] 상품 판매가가 협의 단가 또는 옵션별 최종 결제 가격과 다를 수 있음을 UI에 반영.
-- [ ] 카탈로그의 초기 단가를 제안값으로만 사용하고 운영자 확인 후 확정.
+- [x] 상품 판매가가 협의 단가 또는 옵션별 최종 결제 가격과 다를 수 있음을 UI에 반영.
+- [x] 카탈로그의 초기 단가를 제안값으로만 사용하고 운영자 확인 후 확정.
 - [ ] 기본 견적 가져오기 API 존재·접근 범위는 별도 확인. 없으면 수동 입력/CSV 유지.
-- [ ] launch HMAC/timestamp, 전체 query 보존, OAuth state, 운영자 세션 구현.
+- [x] launch HMAC/timestamp, 전체 query 보존, OAuth state, 운영자 세션 구현.
 - [ ] 앱 전용 토큰 저장·timezone·동시 refresh·일시 API 오류 처리.
-- [ ] 사용 API 버전 고정, scope/권한 철회 시 접근 차단.
-- [ ] 앱 삭제 시 보관·내보내기·삭제 정책과 실제 동작 일치.
+- [x] 사용 API 버전 고정, scope/권한 철회 시 접근 차단.
+- [x] 앱 삭제 시 보관·내보내기·삭제 정책과 실제 동작 일치.
 
 스토어프론트 스크립트 삽입 없이 운영자용 앱부터 시작한다. 주문 쓰기 권한은 이 범위에 필요하지 않다.
+
+**C 단계 진행 기록(2026-09-16).** 앱을 개발자센터에 등록하고(Web application / Authorization Code, Redirect URI `/api/auth/callback`, 운영자 권한은 상품 읽기 + 앱, 고객 권한 없음) 설치 흐름을 구현했다.
+
+- 구현: `/api/auth/install`(launch 검증 → OAuth), `/api/auth/callback`(코드 교환·세션), `/api/webhooks/cafe24`(90077/90078 → 토큰 삭제), `/api/cafe24/products`·`/api/cafe24/products/{no}/options`, `src/lib/{cafe24,launch,store,token}.ts`, `/demo`의 상품 선택기.
+- 문서로 확인한 사실: 상품 목록은 `GET /admin/products`, scope는 `mall.read_product`, `limit` 최대 100·`offset` 최대 5000, 호출 40/초(버킷), 공식 쿼터 3,000회/10분. 옵션은 `GET /admin/products/{product_no}/options`. API 버전은 릴리스 후 1년 유효(2026-09-01은 2027-09-01까지). 웹훅은 서명이 아니라 `X-API-Key` 고정 인증정보로 검증하며 payload는 `{ event_no, resource: { mall_id, ... } }`이다.
+- 남은 항목: 멀티쇼핑몰(`shop_no`) 구분이 실제로 필요한지 테스트몰에서 확인. 토큰 동시 refresh 잠금은 아직 없다(같은 몰에서 동시 요청이 겹치면 refresh가 중복될 수 있음).
+- 검증: 단위·stub 테스트 67개, 프로덕션 빌드 HTTP 라우트 확인 20개, 미설치 브라우저 동작 확인. 실몰 설치·상품 조회는 **미검증**(자동 검증은 스텁)이라 테스트몰 설치가 다음 관문이다. 설치 한도(기본 5회)를 쓰므로 순서를 정해 한 번에 통과시켜야 한다.
+- 필요한 운영 설정: `CAFE24_CLIENT_ID`·`CAFE24_CLIENT_SECRET`·`CAFE24_REDIRECT_URI`·`CAFE24_WEBHOOK_API_KEY`·`DATABASE_URL`. 토큰 저장은 Neon 등 Postgres 무료 티어(추가 현금 0원)로 시작한다.
 
 ## 8. 문서 출력과 접근 보호
 
@@ -190,7 +198,7 @@ QA.md                        구현 시작 때 작성할 수동 검증표
 
 ### C. 연동 MVP
 
-- [ ] OAuth·tenant DB·상품 검색/선택 구현.
+- [x] OAuth·tenant DB·상품 검색/선택 구현. (토큰 DB·상품 검색/선택 완료, 견적 문서 저장은 미구현)
 - [ ] 초안 저장·확정 snapshot·복제·버전 충돌 처리.
 - [ ] 두 출력 adapter를 저장된 snapshot에 연결.
 - [ ] 권한·파일 생성·장문/다페이지·한글 출력 테스트.

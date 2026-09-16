@@ -17,6 +17,7 @@ import { parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
 import { documentToXlsx, xlsxFileName } from "@/features/quotes/xlsx";
 import { saveDocument } from "@/features/quotes/storage";
 import { createEmptyDocument, createSampleDocument } from "@/fixtures/samples";
+import { ProductPicker } from "./ProductPicker";
 
 type PendingImport = {
   source: string;
@@ -95,6 +96,11 @@ export function QuoteDemo() {
 
   const addItem = () => {
     setDoc((prev) => ({ ...prev, items: [...prev.items, createEmptyItem()] }));
+  };
+
+  const addItems = (rows: QuoteItem[]) => {
+    setDoc((prev) => ({ ...prev, items: [...prev.items, ...rows] }));
+    setStatusMessage(`Cafe24 상품 ${rows.length}개 행을 추가했습니다. 제안 단가를 확인해 주세요.`);
   };
 
   const removeItem = (id: string) => {
@@ -346,6 +352,8 @@ export function QuoteDemo() {
               </div>
             ) : null}
           </section>
+
+          <ProductPicker onAdd={addItems} />
 
           <section className="rounded border border-neutral-300 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
