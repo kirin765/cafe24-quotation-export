@@ -96,7 +96,18 @@ CSV·엑셀 파일로 품목을 한 번에 올리고, 오류는 행 번호로 �
 - 이미지 URL은 `https://cafe24-quotation-export.vercel.app/store/detail-01.png` ~ `detail-05.png` (배포본에서 서빙).
 - 편집기 방식으로 넣을 경우 같은 이미지 파일을 `public/store/`에서 올린다.
 
-**FAQ** (폼에서 하나씩 입력하거나, 폼의 양식 CSV를 내려받아 옮긴다)
+**FAQ**
+
+폼의 FAQ 가져오기 양식(`faq_sample_ko.xlsx`, 열: `제목`·`내용`)에 맞춰 **12건**을 파일로 만들었다.
+
+| 파일 | 비고 |
+|---|---|
+| `store-assets/faq_ko.xlsx` | 내려받은 샘플과 같은 형식(Sheet1, `제목`/`내용`) |
+| `store-assets/faq_ko.csv` | 같은 내용의 UTF-8 CSV. 폼 버튼이 ‘Import CSV’이고 xlsx 가져오기가 막히면 이 파일을 쓴다 |
+
+재생성: `node store-assets/render-faq.mjs` (FAQ 내용을 고친 뒤 다시 실행)
+
+내용(폼에 직접 입력해도 된다):
 
 | 질문 | 답변 |
 |---|---|

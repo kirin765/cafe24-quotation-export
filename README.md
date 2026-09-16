@@ -224,6 +224,7 @@ QA.md                           수동 검증표와 자동 검증 결과
 | `store-assets/icon-512.png`, `icon-256.png`, `banner-740x416.png` | 아이콘·배너 |
 | `store-assets/store-registration-form.md` | 스토어 등록 폼 필드별 입력값(제품명·문구·이미지·고지·결제) |
 | `store-assets/detail-description.html` | 상세 설명에 붙여 넣는 HTML(이미지 5장, alt 포함, 폭 1240px 이하) |
+| `store-assets/faq_ko.xlsx`, `faq_ko.csv` | FAQ 가져오기용 12건(폼 양식 열: 제목·내용) |
 | `store-assets/screenshots/` | 앱 스크린샷(합성 데이터, 참고용) |
 | `store-assets/registration/pc-*.png` | PC 스크린샷 1920×1080 (등록 규격) |
 | `store-assets/registration/mobile-*.png` | 모바일 스크린샷 360×640 (등록 규격) |
@@ -233,7 +234,8 @@ QA.md                           수동 검증표와 자동 검증 결과
 
 재생성: `node store-assets/render-detail-images.mjs`(서버 불필요),
 `node store-assets/render-screenshots.mjs`(참고용, 앱 실행 필요),
-`node store-assets/render-registration-images.mjs`(등록 규격 PC·모바일, 앱 실행 + `DATABASE_URL` 필요)
+`node store-assets/render-registration-images.mjs`(등록 규격 PC·모바일, 앱 실행 + `DATABASE_URL` 필요),
+`node store-assets/render-faq.mjs`(FAQ 파일)
 
 ## 배포
 
