@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, parseItemCsv } from "./csv";
+import { decodeCsvBytes, parseCsv, parseItemCsv } from "./csv";
 import { MAX_CSV_ROWS } from "./model";
 
 const HEADER = "item_code,product_name,option_name,quantity,unit_price";
@@ -20,6 +20,32 @@ describe("CSV 파서", () => {
     expect(rows[1][1]).toBe("이름, 쉼표");
     expect(rows[1][2]).toBe('따옴표"포함');
     expect(rows[2][1]).toBe("여러\n줄");
+  });
+});
+
+describe("CSV 인코딩 감지", () => {
+  // 엑셀의 'CSV(쉼표로 분리)'로 저장하면 EUC-KR이 된다(실측 바이트).
+  const eucKrBytes = new Uint8Array([
+    0xbb, 0xf3, 0xc7, 0xb0, 0xb8, 0xed, 0x2c, 0xbc, 0xf6, 0xb7, 0xae, 0x2c, 0xc6, 0xc7, 0xb8, 0xc5,
+    0xb0, 0xa1, 0x0a, 0xbb, 0xf9, 0xc7, 0xc3, 0x20, 0xc5, 0xb8, 0xbf, 0xf9, 0x2c, 0x31, 0x30, 0x2c,
+    0x35, 0x30, 0x30, 0x30, 0x0a,
+  ]);
+
+  it("UTF-8 파일은 그대로 읽는다", () => {
+    const bytes = new TextEncoder().encode("상품명,수량,판매가\n샘플 타월,10,5000\n")
+      .buffer as ArrayBuffer;
+    const decoded = decodeCsvBytes(bytes);
+    expect(decoded.encoding).toBe("utf-8");
+    expect(decoded.text).toContain("샘플 타월");
+  });
+
+  it("EUC-KR 파일도 글자가 깨지지 않게 읽는다", () => {
+    const decoded = decodeCsvBytes(eucKrBytes.buffer as ArrayBuffer);
+    expect(decoded.encoding).toBe("euc-kr");
+    expect(decoded.text).toContain("상품명");
+    const result = parseItemCsv(decoded.text);
+    expect(result.headerError).toBeNull();
+    expect(result.items[0]).toMatchObject({ productName: "샘플 타월", quantity: 10, unitPrice: 5000 });
   });
 });
 
@@ -53,6 +79,15 @@ describe("품목 CSV 가져오기", () => {
     expect(result.headerError).toBeNull();
     expect(result.items[0].productName).toBe("가");
     expect(result.warnings.join(" ")).toContain("일부만 사용");
+  });
+
+  it("재고수량 열은 수량으로 쓰지 않고 경고한다(마켓 상품 목록 양식)", () => {
+    const result = parseItemCsv(`상품명,판매가,재고수량\n샘플 타월,5000,120\n`);
+    expect(result.headerError).toBeNull();
+    expect(result.items[0]).toMatchObject({ quantity: 1, unitPrice: 5000 });
+    const warnings = result.warnings.join(" ");
+    expect(warnings).toContain("재고수량");
+    expect(warnings).toContain("재고는 주문 수량이 아니므로");
   });
 
   it("수량 열이 없으면 1로 채우고 경고한다(카페24 상품 목록 양식)", () => {

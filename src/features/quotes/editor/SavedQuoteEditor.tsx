@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   createEmptyItem,
@@ -14,7 +14,7 @@ import {
   type QuoteDocument,
   type QuoteItem,
 } from "@/features/quotes/model";
-import { parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
+import { decodeCsvBytes, parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
 import { downloadXlsx, openPrintWindow, recordExportEvent } from "@/features/quotes/client-export";
 import { ProductPicker } from "@/features/quotes/editor/ProductPicker";
 import { DocumentFields, ErrorText, inputClass } from "@/features/quotes/editor/DocumentFields";
@@ -98,6 +98,7 @@ export function SavedQuoteEditor({
   const [showSupplier, setShowSupplier] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importHeaderError, setImportHeaderError] = useState<string | null>(null);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
@@ -169,6 +170,16 @@ export function SavedQuoteEditor({
   const addItems = (rows: QuoteItem[]) => {
     change({ ...doc, items: [...doc.items, ...rows] });
     setMessage(`Cafe24 상품 ${rows.length}개 행을 추가했습니다. 제안 단가를 확인해 주세요.`);
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    const { text, encoding } = decodeCsvBytes(await file.arrayBuffer());
+    handleCsvText(text, encoding === "euc-kr" ? `${file.name} (EUC-KR로 읽음)` : file.name);
   };
 
   const handleCsvText = (text: string, source: string) => {
@@ -534,6 +545,13 @@ export function SavedQuoteEditor({
               <div className="flex flex-wrap gap-2">
                 <button
                   className="rounded border border-neutral-400 bg-white px-3 py-1.5 text-xs font-semibold"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                >
+                  CSV 파일 가져오기
+                </button>
+                <button
+                  className="rounded border border-neutral-400 bg-white px-3 py-1.5 text-xs font-semibold"
                   onClick={() => setPasteOpen((prev) => !prev)}
                   type="button"
                 >
@@ -548,8 +566,16 @@ export function SavedQuoteEditor({
                 </button>
               </div>
             </div>
+            <input
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              type="file"
+            />
             <p className="mt-2 text-xs text-neutral-500">
-              열: item_code, product_name, option_name, quantity, unit_price · 최대 {MAX_CSV_ROWS}행
+              열: item_code, product_name, option_name, quantity, unit_price · 최대 {MAX_CSV_ROWS}행 ·
+              엑셀에서 저장할 때는 &lsquo;CSV UTF-8&rsquo;을 권장합니다(EUC-KR도 자동 인식).
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               실제 파일의 열 이름도 인식합니다: 상품코드·상품명·공급가·판매가·옵션(카페24 상품 목록 양식),

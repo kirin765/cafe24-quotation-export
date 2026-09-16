@@ -9,7 +9,7 @@ import {
   type QuoteDocument,
   type QuoteItem,
 } from "@/features/quotes/model";
-import { parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
+import { decodeCsvBytes, parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
 import { downloadXlsx, openPrintWindow } from "@/features/quotes/client-export";
 import { saveDocument } from "@/features/quotes/storage";
 import { createEmptyDocument, createSampleDocument } from "@/fixtures/samples";
@@ -146,7 +146,11 @@ export function QuoteDemo() {
     if (!file) {
       return;
     }
-    const text = await file.text();
+    const { text, encoding } = decodeCsvBytes(await file.arrayBuffer());
+    if (encoding === "euc-kr") {
+      handleCsvText(text, `${file.name} (EUC-KR로 읽음)`);
+      return;
+    }
     handleCsvText(text, file.name);
   };
 
@@ -275,7 +279,8 @@ export function QuoteDemo() {
             />
             <p className="mt-2 text-xs text-neutral-500">
               열: item_code, product_name, option_name, quantity, unit_price · 최대 1MB ·{" "}
-              {MAX_CSV_ROWS}행 · 품목 코드의 앞자리 0은 그대로 유지됩니다.
+              {MAX_CSV_ROWS}행 · 품목 코드의 앞자리 0은 그대로 유지됩니다 · 엑셀에서 저장할 때는
+              &lsquo;CSV UTF-8&rsquo;을 권장합니다(EUC-KR도 자동 인식).
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               실제 파일의 열 이름도 인식합니다: 상품코드·상품명·공급가·판매가·옵션(카페24 상품 목록 양식),

@@ -57,6 +57,23 @@ const HEADER_ALIASES: Record<string, string> = {
 };
 
 /**
+ * 한국에서 만든 CSV는 인코딩이 갈린다. 엑셀의 'CSV(쉼표로 분리)'는 EUC-KR(=CP949)이고,
+ * 카페24 다운로드와 엑셀의 'CSV UTF-8'은 UTF-8(BOM 포함)이다.
+ * UTF-8로 엄격하게 읽어 보고 실패하면 EUC-KR로 다시 읽는다. 깨진 글자를 그대로 받아들이면
+ * 상품명이 물음표로 저장되므로, 조용히 넘어가지 않고 어떤 인코딩으로 읽었는지 알린다.
+ */
+export function decodeCsvBytes(bytes: ArrayBuffer): {
+  text: string;
+  encoding: "utf-8" | "euc-kr";
+} {
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), encoding: "utf-8" };
+  } catch {
+    return { text: new TextDecoder("euc-kr").decode(bytes), encoding: "euc-kr" };
+  }
+}
+
+/**
  * 실제 파일의 숫자 표기를 받아들인다. 카페24 상품 엑셀은 `5000.00`처럼 소수점 둘째 자리까지
  * 내보내고, 사람이 손댄 파일에는 `5,000`처럼 천단위 쉼표가 들어간다. 소수 부분이 0이 아니면
  * 조용히 반올림하지 않고 거부한다.
@@ -295,6 +312,13 @@ export function parseItemCsv(text: string): CsvParseResult {
   }
   if (!hasQuantity) {
     warnings.push("수량 열이 없어 모든 행의 수량을 1로 채웠습니다. 표에서 수정하세요.");
+  }
+  // 재고수량은 '지금 있는 개수'지 주문 수량이 아니다. 수량으로 쓰면 견적이 조용히 틀어진다.
+  const stockColumns = header.filter((column) => normalizeColumn(column).includes("재고"));
+  if (!hasQuantity && stockColumns.length > 0) {
+    warnings.push(
+      `재고수량 열(${stockColumns.map((c) => `"${c}"`).join(", ")})은 견적 수량으로 쓰지 않습니다. 재고는 주문 수량이 아니므로 표에서 직접 입력하세요.`,
+    );
   }
   if (ignored.length > 0) {
     warnings.push(`같은 뜻의 열이 여럿이라 일부만 사용했습니다: ${ignored.join(", ")}`);
