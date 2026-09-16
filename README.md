@@ -170,5 +170,19 @@ Vercel에 배포합니다. 서버 라우트를 쓰므로 위 환경변수와 토
 vercel --prod
 ```
 
-토큰 저장은 `DATABASE_URL`이 가리키는 아무 Postgres나 됩니다(Neon 무료 티어 등). 테이블은 `cafe24_quotation_token`을 첫 요청 때 자동 생성합니다.
+토큰 저장은 `DATABASE_URL`이 가리키는 아무 Postgres나 됩니다. 테이블은 `cafe24_quotation_token`을 첫 요청 때 자동 생성합니다.
+
+현재 운영 구성(2026-09-16):
+
+| 항목 | 값 |
+|---|---|
+| 프로젝트 | `kirin765s-projects/cafe24-quotation-export` |
+| 도메인 | `https://cafe24-quotation-export.vercel.app` |
+| App URL | `https://cafe24-quotation-export.vercel.app/api/auth/install` |
+| Redirect URI | `https://cafe24-quotation-export.vercel.app/api/auth/callback` |
+| WebHook URL | `https://cafe24-quotation-export.vercel.app/api/webhooks/cafe24` (앱 삭제 90077 · 만료 90078) |
+| Postgres | Vercel Storage `cafe24-quotation-export-db` (Neon, production/preview/development 연결) |
+| 환경변수 | `CAFE24_*` 6개 + `DATABASE_URL` — production에 설정됨 |
+
+`CAFE24_*`는 production 전용입니다. Redirect URI를 등록된 값과 정확히 맞춰야 하므로 preview·로컬에서는 OAuth를 쓰지 않고, 연동 테스트는 배포 도메인에서 합니다.
 
