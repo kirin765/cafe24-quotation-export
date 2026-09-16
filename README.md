@@ -220,6 +220,7 @@ QA.md                           수동 검증표와 자동 검증 결과
 | 경로 | 내용 |
 |---|---|
 | `SUBMIT.md` | 심사 제출 절차·자기 시험·반려 사유 대응표 |
+| `REVIEW-EMAIL.md` / `REVIEW-EMAIL.txt` | 심사 요청 메일 초안(마크다운 / 붙여넣기용 평문) |
 | `store-assets/store-listing-copy.md` | 앱 이름·소개·상세 설명·연관검색어·이미지 목록 |
 | `store-assets/icon-512.png`, `icon-256.png`, `banner-740x416.png` | 아이콘·배너 |
 | `store-assets/store-registration-form.md` | 스토어 등록 폼 필드별 입력값(제품명·문구·이미지·고지·결제) |
