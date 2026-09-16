@@ -129,22 +129,25 @@ function countRecognized(cells: readonly string[]): number {
 
 /**
  * 열 이름 행을 찾는다. 카페24 상품 엑셀은 첫 행이 머리글이지만, 마켓 양식은 위에 제목 행이
- * 붙기도 한다. 아는 열 이름이 가장 많이 나오고 상품명 열이 있는 행을 머리글로 본다.
+ * 붙기도 한다. 상품명 열이 있는 행만 후보로 보고, 그중 아는 열 이름이 가장 많은 행을 머리글로
+ * 삼는다. 상품명 없는 행을 후보에서 빼지 않으면, 열 이름을 나열한 안내 행이 후보로 뽑혀
+ * 멀쩡한 파일을 거부할 수 있다.
  */
 function findHeaderRow(rows: readonly string[][]): number {
   let best = -1;
   let bestScore = 0;
   for (let index = 0; index < Math.min(rows.length, 10); index += 1) {
-    const score = countRecognized(rows[index]);
+    const row = rows[index];
+    if (!row.some((cell) => resolveColumn(cell) === "product_name")) {
+      continue;
+    }
+    const score = countRecognized(row);
     if (score > bestScore) {
       best = index;
       bestScore = score;
     }
   }
-  if (bestScore < 2 || best === -1) {
-    return -1;
-  }
-  return rows[best].some((cell) => resolveColumn(cell) === "product_name") ? best : -1;
+  return bestScore >= 2 ? best : -1;
 }
 
 /**
@@ -381,17 +384,20 @@ export function parseItemCsv(text: string): CsvParseResult {
   }
 
   const dataRows: { cells: string[]; line: number }[] = [];
-  let guideRowCount = 0;
+  const guideLines: number[] = [];
   rows.slice(headerRowIndex + 1).forEach((cells, offset) => {
     const line = headerRowIndex + offset + 2;
     if (isGuideRow(cells)) {
-      guideRowCount += 1;
+      guideLines.push(line);
       return;
     }
     dataRows.push({ cells, line });
   });
-  if (guideRowCount > 0) {
-    warnings.push(`필수·설명 안내 행 ${guideRowCount}개는 상품이 아니라서 건너뛰었습니다.`);
+  if (guideLines.length > 0) {
+    // 어떤 줄을 건너뛰었는지 밝힌다. 실제 상품 행이 안내 행으로 잘못 분류되면 바로 알아챌 수 있다.
+    warnings.push(
+      `필수·설명 안내 행 ${guideLines.length}개(${guideLines.join(", ")}행)는 상품이 아니라서 건너뛰었습니다.`,
+    );
   }
   if (dataRows.length > MAX_CSV_ROWS) {
     return {
@@ -510,6 +516,13 @@ export function parseItemCsv(text: string): CsvParseResult {
       unitPrice,
     });
   });
+
+  const multiOptionRows = items.filter((item) => /[,\n]/.test(item.optionName)).length;
+  if (multiOptionRows > 0) {
+    warnings.push(
+      `옵션 칸에 여러 값이 함께 든 행이 ${multiOptionRows}개 있습니다(마켓 양식의 조합형). 한 행을 한 상품으로 가져오므로 필요한 옵션만 남기고 정리하세요. 옵션 추가금액(옵션가)은 반영하지 않았습니다.`,
+    );
+  }
 
   return {
     headerError: null,

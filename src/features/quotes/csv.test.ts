@@ -199,6 +199,32 @@ P0000101,샘플 타월,3500.00,5000.00,네이비,T`);
     expect(result.warnings.join(" ")).toContain('unit_price은 "판매가" 사용');
   });
 
+  it("위쪽 안내 행이 아는 열 이름을 더 많이 담고 있어도 상품명이 없으면 머리글로 보지 않는다", () => {
+    const result = parseItemCsv(
+      `수량,단가,금액,공급가,재고수량,옵션명,판매가\n` + // 안내 행: 우리가 아는 이름 7개, 상품명 없음
+        `상품명,판매가,재고수량\n` + // 진짜 머리글
+        `샘플 타월,5000,10\n`,
+    );
+    expect(result.headerError).toBeNull();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ productName: "샘플 타월", unitPrice: 5000, quantity: 1 });
+  });
+
+  it("건너뛴 안내 행 번호를 알려 준다", () => {
+    const result = parseItemCsv(
+      `상품명,판매가,재고수량\n비필수,필수,필수\n샘플 타월,5000,10\n`,
+    );
+    expect(result.items).toHaveLength(1);
+    expect(result.warnings.join(" ")).toContain("(2행)");
+  });
+
+  it("옵션 칸에 여러 값이 있으면 정리를 안내한다(마켓 조합형)", () => {
+    const result = parseItemCsv(`상품명,판매가,옵션값\n샘플 골지 니트,85000,"빨강,노랑\nS,M,L"\n`);
+    expect(result.items[0].optionName).toContain("빨강");
+    expect(result.warnings.join(" ")).toContain("조합형");
+    expect(result.warnings.join(" ")).toContain("옵션가");
+  });
+
   it("빈 파일과 헤더만 있는 파일을 구분한다", () => {
     expect(parseItemCsv("").headerError).toBeTruthy();
     const headerOnly = parseItemCsv(`${HEADER}\n`);
