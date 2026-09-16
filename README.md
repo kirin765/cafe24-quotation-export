@@ -232,6 +232,9 @@ QA.md                           수동 검증표와 자동 검증 결과
 | `store-assets/banner-740x416.png`(+`@2x`) | 상단 배너 |
 | `public/store/detail-01..05.png` | 심사용 상세 설명 이미지(1240px, 카페24 폭 제한 준수) |
 
+아이콘·배너 이미지는 생성 시 규격(아이콘 크기, 배너 740px)을 넘으면 생성을 실패시킨다. 폰트·크기를 인라인
+`style` 안에서 큰따옴표로 쓰면 속성이 끊겨 레이아웃이 깨지므로, 폰트는 `body`에 건다.
+
 재생성: `node store-assets/render-detail-images.mjs`(서버 불필요),
 `node store-assets/render-screenshots.mjs`(참고용, 앱 실행 필요),
 `node store-assets/render-registration-images.mjs`(등록 규격 PC·모바일, 앱 실행 + `DATABASE_URL` 필요),

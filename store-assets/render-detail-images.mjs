@@ -177,25 +177,42 @@ for (const [name, markup] of Object.entries(images)) {
 await browser.close();
 
 // 아이콘과 배너
-const icon = () => `
-  <div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:space-between;padding:18%;background:#111827;color:#fff;font-family:${FONT}">
-    <div style="font-size:15%;font-weight:800;letter-spacing:.2em;color:#93c5fd">QUOTE</div>
-    <div style="font-size:34%;font-weight:800;line-height:1.05">견적<br>내보내기</div>
+/**
+ * 아이콘: 정사각형, 둥근 모서리 없음, 심볼 중앙. 폰트 크기는 반드시 px로 준다
+ * (퍼센트는 컨테이너가 아니라 상속 폰트 기준이라 글자가 사라진다). 100px에서는 부제를 뺀다.
+ */
+const icon = (size) => {
+  const main = Math.round(size * 0.36);
+  const sub = Math.round(size * 0.085);
+  const bar = Math.max(2, Math.round(size * 0.045));
+  const showSub = size >= 200;
+  return `
+  <div style="width:${size}px;height:${size}px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0f172a;color:#fff">
+    <div style="font-size:${main}px;font-weight:800;line-height:1.05;letter-spacing:-0.02em">견적</div>
+    <div style="width:${Math.round(size * 0.26)}px;height:${bar}px;background:#3b82f6;border-radius:${bar}px;margin-top:${Math.round(size * 0.055)}px"></div>
+    ${showSub ? `<div style="font-size:${sub}px;font-weight:700;letter-spacing:0.18em;color:#93c5fd;margin-top:${Math.round(size * 0.06)}px">XLSX · PDF</div>` : ""}
+  </div>`;
+};
+
+/** 배너: 왼쪽 글자는 칸 안에서 줄바꿈되게 하고(min-width:0), 넘침을 잘라 오른쪽 카드가 잘리지 않게 한다. */
+const banner = `
+  <div style="width:740px;height:416px;overflow:hidden;display:flex;align-items:center;gap:28px;padding:40px;background:#0f172a;color:#fff;box-sizing:border-box">
+    <div style="flex:1 1 auto;min-width:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:4px;background:#3b82f6;border-radius:4px"></div>
+        <div style="font-size:14px;font-weight:800;letter-spacing:0.2em;color:#93c5fd">CAFE24 B2B</div>
+      </div>
+      <div style="font-size:38px;font-weight:800;line-height:1.22;margin-top:14px">견적 내보내기</div>
+      <div style="font-size:16px;color:#d1d5db;line-height:1.6;margin-top:12px">상품을 고르고 협의 단가만 확인하면<br>편집 가능한 XLSX와 인쇄용 PDF 견적서가 나옵니다</div>
+    </div>
+    <div style="flex:0 0 208px;background:#111f3d;border:1px solid #1e3a8a;border-radius:14px;padding:20px">
+      <div style="font-size:13px;color:#9ca3af">견적 총액</div>
+      <div style="font-size:30px;font-weight:800;margin-top:6px">888,700원</div>
+      <div style="font-size:13px;color:#93c5fd;margin-top:10px">확정 버전 v1</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:6px">품목 10행 · 부가세 별도</div>
+    </div>
   </div>`;
 
-const banner = `
-  <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:space-between;padding:0 48px;background:#111827;color:#fff;font-family:${FONT}">
-    <div>
-      <div style="font-size:14px;font-weight:800;letter-spacing:.2em;color:#93c5fd">CAFE24 B2B</div>
-      <div style="font-size:40px;font-weight:800;margin-top:10px;line-height:1.2">견적 내보내기</div>
-      <div style="font-size:17px;color:#d1d5db;margin-top:10px">상품을 고르고 단가만 확인하면 XLSX · PDF 견적서가 바로</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:13px;color:#9ca3af">견적 총액</div>
-      <div style="font-size:32px;font-weight:800">888,700원</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:6px">v1 확정</div>
-    </div>
-  </div>`;
 
 const browser2 = await chromium.launch();
 for (const [file, size] of [
@@ -207,9 +224,14 @@ for (const [file, size] of [
     viewport: { width: size, height: size },
     deviceScaleFactor: 1,
   });
-  await page.setContent(`<style>*{margin:0;padding:0}body{width:${size}px;height:${size}px}</style>${icon()}`);
+  const pageCss = `<style>*{margin:0;padding:0;box-sizing:border-box}body{width:${size}px;height:${size}px;font-family:${FONT}}</style>`;
+  await page.setContent(`${pageCss}${icon(size)}`);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth);
+  if (overflow > size) {
+    throw new Error(`${file}: 내용이 ${overflow}px로 넘칩니다(목표 ${size}px)`);
+  }
   await page.screenshot({ path: path.join(storeDir, file) });
-  console.log(`${file}  ${size}x${size}`);
+  console.log(`${file}  ${size}x${size}  내용폭 ${overflow}px`);
   await page.close();
 }
 {
@@ -221,9 +243,25 @@ for (const [file, size] of [
       viewport: { width: 740, height: 416 },
       deviceScaleFactor: scale,
     });
-    await page.setContent(`<style>*{margin:0;padding:0}body{width:740px;height:416px}</style>${banner}`);
+    const bannerCss = `<style>*{margin:0;padding:0;box-sizing:border-box}body{width:740px;height:416px;overflow:hidden;font-family:${FONT}}</style>`;
+    await page.setContent(`${bannerCss}${banner}`);
+    const layout = await page.evaluate(() => {
+      const outer = document.body.firstElementChild;
+      const children = [...outer.children].map((k) => {
+        const r = k.getBoundingClientRect();
+        return Math.round(r.right);
+      });
+      return {
+        width: Math.round(outer.getBoundingClientRect().width),
+        rightmost: Math.max(...children),
+      };
+    });
+    // 잘림은 조용히 지나가면 안 된다. 규격을 넘으면 생성 자체를 실패시킨다.
+    if (layout.width !== 740 || layout.rightmost > 740) {
+      throw new Error(`${file}: 배너가 규격을 넘습니다(폭 ${layout.width}, 내용 오른쪽 끝 ${layout.rightmost})`);
+    }
+    console.log(`${file}  ${740 * scale}x${416 * scale}  폭 ${layout.width}px, 내용 오른쪽 끝 ${layout.rightmost}px`);
     await page.screenshot({ path: path.join(storeDir, file) });
-    console.log(`${file}  ${740 * scale}x${416 * scale}`);
     await page.close();
   }
 }
