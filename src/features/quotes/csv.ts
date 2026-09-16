@@ -30,6 +30,7 @@ const HEADER_ALIASES: Record<string, string> = {
   상품번호: "item_code",
   품목코드: "item_code",
   자체상품코드: "item_code",
+  판매자상품코드: "item_code",
   자체품목코드: "item_code",
   코드: "item_code",
   상품명: "product_name",
@@ -99,7 +100,7 @@ const normalizeColumn = (value: string) =>
  * 판매가가 함께 나오는데, 거래처에 보내는 견적의 출발점은 판매가가 맞다.
  */
 const COLUMN_PREFERENCE: Record<string, string[]> = {
-  item_code: ["상품코드", "자체상품코드", "품목코드", "자체품목코드", "상품번호", "코드"],
+  item_code: ["상품코드", "판매자상품코드", "자체상품코드", "품목코드", "자체품목코드", "상품번호", "코드"],
   product_name: ["상품명", "품목명", "품명", "품목", "제품명"],
   option_name: ["옵션값", "옵션명", "옵션", "규격"],
   quantity: ["수량", "주문수량"],
@@ -117,6 +118,44 @@ function resolveColumn(header: string): string | null {
     return null;
   }
   return CANONICAL_BY_NORMALIZED.get(normalized) ?? HEADER_ALIASES[normalized] ?? null;
+}
+
+const GUIDE_ROW_HINTS = /(입력|필수|선택하여|비필수)/;
+const GUIDE_ROW_MARKERS = new Set(["필수", "비필수", "조건부필수"]);
+
+function countRecognized(cells: readonly string[]): number {
+  return cells.reduce((sum, cell) => sum + (resolveColumn(cell) ? 1 : 0), 0);
+}
+
+/**
+ * 열 이름 행을 찾는다. 카페24 상품 엑셀은 첫 행이 머리글이지만, 마켓 양식은 위에 제목 행이
+ * 붙기도 한다. 아는 열 이름이 가장 많이 나오고 상품명 열이 있는 행을 머리글로 본다.
+ */
+function findHeaderRow(rows: readonly string[][]): number {
+  let best = -1;
+  let bestScore = 0;
+  for (let index = 0; index < Math.min(rows.length, 10); index += 1) {
+    const score = countRecognized(rows[index]);
+    if (score > bestScore) {
+      best = index;
+      bestScore = score;
+    }
+  }
+  if (bestScore < 2 || best === -1) {
+    return -1;
+  }
+  return rows[best].some((cell) => resolveColumn(cell) === "product_name") ? best : -1;
+}
+
+/**
+ * '필수/비필수' 안내 행이나 '…입력할 수 있습니다' 설명 행인지.
+ * 실제 상품 행을 지우지 않도록 촘촘하게(2개 이상 표시 또는 3개 이상 안내 문구) 본다.
+ */
+function isGuideRow(cells: readonly string[]): boolean {
+  if (cells.filter((cell) => GUIDE_ROW_MARKERS.has(cell.trim())).length >= 2) {
+    return true;
+  }
+  return cells.filter((cell) => GUIDE_ROW_HINTS.test(cell)).length >= 3;
 }
 
 export type CsvCellError = {
@@ -257,9 +296,26 @@ export function parseItemCsv(text: string): CsvParseResult {
     };
   }
 
-  const header = rows[0].map(normalizeHeader);
+  const headerRowIndex = findHeaderRow(rows);
+  if (headerRowIndex === -1) {
+    return {
+      headerError:
+        "열 이름 행을 찾지 못했습니다. 앞 10행 안에 상품명·단가(또는 금액) 같은 열 이름이 있어야 합니다. 양식 맨 위의 안내 행을 지우고 다시 올려 주세요.",
+      items: [],
+      errors,
+      warnings: [],
+      dataRowCount: 0,
+    };
+  }
+
+  const header = rows[headerRowIndex].map(normalizeHeader);
   const candidates = new Map<string, { index: number; raw: string; rank: number }[]>();
   const warnings: string[] = [];
+  if (headerRowIndex > 0) {
+    warnings.push(
+      `위 ${headerRowIndex}행은 제목·안내라 건너뛰고 ${headerRowIndex + 1}번째 행을 열 이름으로 읽었습니다.`,
+    );
+  }
 
   header.forEach((raw, index) => {
     const column = resolveColumn(raw);
@@ -324,7 +380,19 @@ export function parseItemCsv(text: string): CsvParseResult {
     warnings.push(`같은 뜻의 열이 여럿이라 일부만 사용했습니다: ${ignored.join(", ")}`);
   }
 
-  const dataRows = rows.slice(1);
+  const dataRows: { cells: string[]; line: number }[] = [];
+  let guideRowCount = 0;
+  rows.slice(headerRowIndex + 1).forEach((cells, offset) => {
+    const line = headerRowIndex + offset + 2;
+    if (isGuideRow(cells)) {
+      guideRowCount += 1;
+      return;
+    }
+    dataRows.push({ cells, line });
+  });
+  if (guideRowCount > 0) {
+    warnings.push(`필수·설명 안내 행 ${guideRowCount}개는 상품이 아니라서 건너뛰었습니다.`);
+  }
   if (dataRows.length > MAX_CSV_ROWS) {
     return {
       headerError: `CSV 데이터는 ${MAX_CSV_ROWS}행 이하여야 합니다. (현재 ${dataRows.length}행)`,
@@ -335,8 +403,7 @@ export function parseItemCsv(text: string): CsvParseResult {
     };
   }
 
-  dataRows.forEach((cells, rowIndex) => {
-    const line = rowIndex + 2;
+  dataRows.forEach(({ cells, line }) => {
     const value = (column: string): string => {
       const position = columnIndex.get(column);
       if (position === undefined) {

@@ -39,6 +39,41 @@ describe("실제 형식 예시 파일", () => {
     expect(result.warnings.join(" ")).toContain("금액 ÷ 수량");
   });
 
+  it("스마트스토어 신 양식(제목 행·필수 안내 행이 섞여 있음)", () => {
+    const result = parseItemCsv(read("smartstore-new.csv"));
+    expect(result.headerError).toBeNull();
+    // 제목 행 1개 + 필수 안내 행 1개 + 설명 행 1개는 상품이 아니다
+    expect(result.items).toHaveLength(3);
+    expect(result.warnings.join(" ")).toContain("열 이름으로 읽었습니다");
+    expect(result.warnings.join(" ")).toContain("안내 행");
+    expect(result.items[0]).toMatchObject({
+      itemCode: "SSKR_0001",
+      productName: "샘플 골지 니트",
+      optionName: "베이지",
+      quantity: 1,
+      unitPrice: 85000,
+    });
+    expect(result.warnings.join(" ")).toContain("재고는 주문 수량이 아니므로");
+  });
+
+  it("스마트스토어 구 양식(첫 행이 열 이름)", () => {
+    const result = parseItemCsv(read("smartstore-old.csv"));
+    expect(result.headerError).toBeNull();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      itemCode: "SSKR_0001",
+      productName: "샘플 골지 니트",
+      quantity: 1,
+      unitPrice: 15000,
+    });
+  });
+
+  it("열 이름 행이 없으면 안내와 함께 거부한다", () => {
+    const result = parseItemCsv("안내,안내\n1,2\n");
+    expect(result.headerError).toContain("열 이름 행을 찾지 못했습니다");
+    expect(result.items).toHaveLength(0);
+  });
+
   it("BOM이 있는 파일", () => {
     const result = parseItemCsv(read("quote-bom.csv"));
     expect(result.headerError).toBeNull();
