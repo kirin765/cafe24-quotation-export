@@ -4,20 +4,23 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   createEmptyItem,
   formatDateTime,
-  formatKrw,
-  lineAmount,
   MAX_CSV_ROWS,
-  parseIntegerInput,
   validateDocument,
   type QuoteDocument,
   type QuoteItem,
-  type SupplierInfo,
 } from "@/features/quotes/model";
 import { parseItemCsv, type CsvCellError } from "@/features/quotes/csv";
-import { documentToXlsx, xlsxFileName } from "@/features/quotes/xlsx";
+import { downloadXlsx, openPrintWindow } from "@/features/quotes/client-export";
 import { saveDocument } from "@/features/quotes/storage";
 import { createEmptyDocument, createSampleDocument } from "@/fixtures/samples";
-import { ProductPicker } from "./ProductPicker";
+import { ProductPicker } from "@/features/quotes/editor/ProductPicker";
+import { DocumentFields, ErrorText, inputClass } from "@/features/quotes/editor/DocumentFields";
+import { ItemsTable } from "@/features/quotes/editor/ItemsTable";
+import {
+  AdjustmentFields,
+  CalculationNote,
+  TotalsPanel,
+} from "@/features/quotes/editor/AdjustmentFields";
 
 type PendingImport = {
   source: string;
@@ -25,29 +28,6 @@ type PendingImport = {
   errors: CsvCellError[];
   dataRowCount: number;
 };
-
-const inputClass =
-  "w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-neutral-900";
-
-const SUPPLIER_FIELDS: { key: keyof SupplierInfo; label: string }[] = [
-  { key: "companyName", label: "상호" },
-  { key: "businessNumber", label: "사업자번호" },
-  { key: "contactName", label: "담당자" },
-  { key: "contactPhone", label: "연락처" },
-  { key: "contactEmail", label: "이메일" },
-  { key: "address", label: "주소" },
-];
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs font-semibold text-neutral-600">{children}</span>;
-}
-
-function ErrorText({ message }: { message: string | undefined }) {
-  if (!message) {
-    return null;
-  }
-  return <p className="mt-0.5 text-xs text-red-600">{message}</p>;
-}
 
 export function QuoteDemo() {
   const [doc, setDoc] = useState<QuoteDocument>(() => createSampleDocument());
@@ -65,19 +45,6 @@ export function QuoteDemo() {
   useEffect(() => {
     saveDocument(doc);
   }, [doc]);
-
-  const documentError = (field: string) =>
-    exportAttempted
-      ? validation.documentErrors.find((error) => error.field === field)?.message
-      : undefined;
-  const totalError = documentError("total");
-  const itemError = (index: number, field: keyof QuoteItem) =>
-    exportAttempted ? validation.itemErrors[index]?.[field] : undefined;
-
-  const issueCount =
-    validation.documentErrors.length +
-    validation.itemErrors.filter((errors) => Object.keys(errors).length > 0).length +
-    (validation.adjustmentError ? 1 : 0);
 
   const update = (patch: Partial<QuoteDocument>) => {
     setDoc((prev) => ({ ...prev, ...patch }));
@@ -175,42 +142,35 @@ export function QuoteDemo() {
     handleCsvText(text, file.name);
   };
 
-  const downloadXlsx = () => {
+  const handleXlsx = () => {
     setExportAttempted(true);
     if (!validation.valid) {
       setStatusMessage("입력 오류를 수정한 뒤 다시 내보내세요.");
       return;
     }
-    const bytes = documentToXlsx(doc);
-    const blob = new Blob([bytes], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = xlsxFileName(doc);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    const name = downloadXlsx(doc);
     setStatusMessage(
-      `${xlsxFileName(doc)} 파일을 만들었습니다. XLSX는 편집 가능하지만 합계가 자동 재계산되지 않습니다.`,
+      `${name} 파일을 만들었습니다. XLSX는 편집 가능하지만 합계가 자동 재계산되지 않습니다.`,
     );
   };
 
-  const openPrint = () => {
+  const handlePrint = () => {
     setExportAttempted(true);
     if (!validation.valid) {
       setStatusMessage("입력 오류를 수정한 뒤 인쇄 화면을 열어 주세요.");
       return;
     }
-    saveDocument(doc);
-    window.open("/demo/print", "_blank", "noopener,noreferrer");
+    openPrintWindow(doc, "/demo/print");
   };
 
   const errorLines = pendingImport
     ? [...new Set(pendingImport.errors.map((error) => error.line))].sort((a, b) => a - b)
     : [];
+
+  const issueCount =
+    validation.documentErrors.length +
+    validation.itemErrors.filter((errors) => Object.keys(errors).length > 0).length +
+    (validation.adjustmentError ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -218,8 +178,8 @@ export function QuoteDemo() {
         <div>
           <h1 className="text-xl font-bold">견적서 데모</h1>
           <p className="mt-1 text-xs text-neutral-600">
-            Cafe24 상품 연동 없이 합성 데이터·CSV로 견적을 작성하고 XLSX와 인쇄용 PDF를 만듭니다.
-            서버 저장 없이 이 브라우저 안에서만 동작합니다.
+            서버에 저장하지 않는 연습용 화면입니다. 편집한 내용은 이 브라우저 안에만 남습니다. 저장이
+            필요하면 Cafe24 관리자에서 앱을 실행해 견적 목록으로 들어가세요.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -259,99 +219,15 @@ export function QuoteDemo() {
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <section className="rounded border border-neutral-300 bg-white p-4">
-            <h2 className="text-sm font-bold">문서 정보</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <FieldLabel>문서 번호</FieldLabel>
-                <input
-                  className={inputClass}
-                  onChange={(event) => update({ documentNumber: event.target.value })}
-                  value={doc.documentNumber}
-                />
-                <ErrorText message={documentError("documentNumber")} />
-              </label>
-              <label className="block">
-                <FieldLabel>버전</FieldLabel>
-                <input
-                  className={inputClass}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    update({ version: Math.max(1, parseIntegerInput(event.target.value)) })
-                  }
-                  value={doc.version}
-                />
-                <ErrorText message={documentError("version")} />
-              </label>
-              <label className="block">
-                <FieldLabel>수신 회사명 (필수)</FieldLabel>
-                <input
-                  className={inputClass}
-                  onChange={(event) => update({ recipientCompany: event.target.value })}
-                  value={doc.recipientCompany}
-                />
-                <ErrorText message={documentError("recipientCompany")} />
-              </label>
-              <label className="block">
-                <FieldLabel>유효기한</FieldLabel>
-                <input
-                  className={inputClass}
-                  onChange={(event) => update({ validUntil: event.target.value })}
-                  placeholder="YYYY-MM-DD"
-                  value={doc.validUntil}
-                />
-                <ErrorText message={documentError("validUntil")} />
-              </label>
-              <label className="block">
-                <FieldLabel>납기·배송 조건</FieldLabel>
-                <input
-                  className={inputClass}
-                  onChange={(event) => update({ deliveryTerms: event.target.value })}
-                  value={doc.deliveryTerms}
-                />
-              </label>
-              <label className="block">
-                <FieldLabel>가격 조건 (세금 포함 여부 등)</FieldLabel>
-                <input
-                  className={inputClass}
-                  onChange={(event) => update({ priceCondition: event.target.value })}
-                  placeholder="예: 부가세 별도 금액입니다."
-                  value={doc.priceCondition}
-                />
-              </label>
-              <label className="block sm:col-span-2">
-                <FieldLabel>비고</FieldLabel>
-                <textarea
-                  className={inputClass}
-                  onChange={(event) => update({ notes: event.target.value })}
-                  rows={2}
-                  value={doc.notes}
-                />
-                <ErrorText message={documentError("notes")} />
-              </label>
-            </div>
-            <button
-              className="mt-3 text-xs font-semibold text-neutral-700 underline"
-              onClick={() => setShowSupplier((prev) => !prev)}
-              type="button"
-            >
-              {showSupplier ? "공급자 정보 닫기" : "공급자 정보 열기"}
-            </button>
-            {showSupplier ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {SUPPLIER_FIELDS.map((field) => (
-                  <label className="block" key={field.key}>
-                    <FieldLabel>{field.label}</FieldLabel>
-                    <input
-                      className={inputClass}
-                      onChange={(event) => updateSupplier(field.key, event.target.value)}
-                      value={doc.supplier[field.key]}
-                    />
-                  </label>
-                ))}
-              </div>
-            ) : null}
-          </section>
+          <DocumentFields
+            doc={doc}
+            onToggleSupplier={() => setShowSupplier((prev) => !prev)}
+            showErrors={exportAttempted}
+            showSupplier={showSupplier}
+            update={update}
+            updateSupplier={updateSupplier}
+            validation={validation}
+          />
 
           <ProductPicker onAdd={addItems} />
 
@@ -462,185 +338,46 @@ export function QuoteDemo() {
                 </div>
               </div>
             ) : null}
-            <ErrorText message={documentError("items")} />
-
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-300 text-left text-xs text-neutral-600">
-                    <th className="w-8 py-1">#</th>
-                    <th className="w-32 py-1">품목 코드</th>
-                    <th className="py-1">상품명 (필수)</th>
-                    <th className="w-32 py-1">옵션</th>
-                    <th className="w-24 py-1">수량</th>
-                    <th className="w-28 py-1">단가(원)</th>
-                    <th className="w-28 py-1 text-right">금액</th>
-                    <th className="w-16 py-1" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {doc.items.map((item, index) => (
-                    <tr className="border-b border-neutral-200 align-top" key={item.id}>
-                      <td className="py-1 text-xs text-neutral-500">{index + 1}</td>
-                      <td className="py-1 pr-1">
-                        <input
-                          className={inputClass}
-                          onChange={(event) => updateItem(item.id, { itemCode: event.target.value })}
-                          value={item.itemCode}
-                        />
-                        <ErrorText message={itemError(index, "itemCode")} />
-                      </td>
-                      <td className="py-1 pr-1">
-                        <input
-                          className={inputClass}
-                          onChange={(event) =>
-                            updateItem(item.id, { productName: event.target.value })
-                          }
-                          value={item.productName}
-                        />
-                        <ErrorText message={itemError(index, "productName")} />
-                      </td>
-                      <td className="py-1 pr-1">
-                        <input
-                          className={inputClass}
-                          onChange={(event) =>
-                            updateItem(item.id, { optionName: event.target.value })
-                          }
-                          value={item.optionName}
-                        />
-                        <ErrorText message={itemError(index, "optionName")} />
-                      </td>
-                      <td className="py-1 pr-1">
-                        <input
-                          className={`${inputClass} text-right`}
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            updateItem(item.id, { quantity: parseIntegerInput(event.target.value) })
-                          }
-                          value={item.quantity}
-                        />
-                        <ErrorText message={itemError(index, "quantity")} />
-                      </td>
-                      <td className="py-1 pr-1">
-                        <input
-                          className={`${inputClass} text-right`}
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            updateItem(item.id, { unitPrice: parseIntegerInput(event.target.value) })
-                          }
-                          value={item.unitPrice}
-                        />
-                        <ErrorText message={itemError(index, "unitPrice")} />
-                      </td>
-                      <td className="py-1 text-right text-sm whitespace-nowrap">
-                        {lineAmount(item).toLocaleString("ko-KR")}
-                      </td>
-                      <td className="py-1 text-right">
-                        <button
-                          className="text-xs text-red-600 underline"
-                          onClick={() => removeItem(item.id)}
-                          type="button"
-                        >
-                          삭제
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="rounded border border-neutral-300 bg-white p-4">
-            <h2 className="text-sm font-bold">조정 금액</h2>
-            <p className="mt-1 text-xs text-neutral-600">
-              배송비나 일괄 할인처럼 품목에 담기 어려운 금액입니다. 설명을 반드시 입력하고, 할인은
-              음수로 넣습니다.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <FieldLabel>설명</FieldLabel>
-                <input
-                  className={inputClass}
-                  disabled={!doc.adjustment}
-                  onChange={(event) =>
-                    update({
-                      adjustment: doc.adjustment
-                        ? { ...doc.adjustment, description: event.target.value }
-                        : null,
-                    })
-                  }
-                  placeholder="예: 배송비, 일괄 할인"
-                  value={doc.adjustment?.description ?? ""}
-                />
-              </label>
-              <label className="block">
-                <FieldLabel>금액(원)</FieldLabel>
-                <input
-                  className={`${inputClass} text-right`}
-                  disabled={!doc.adjustment}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    update({
-                      adjustment: doc.adjustment
-                        ? { ...doc.adjustment, amount: parseIntegerInput(event.target.value, true) }
-                        : null,
-                    })
-                  }
-                  value={doc.adjustment?.amount ?? 0}
-                />
-              </label>
-            </div>
-            <ErrorText message={exportAttempted ? validation.adjustmentError ?? undefined : undefined} />
-            <button
-              className="mt-3 text-xs font-semibold text-neutral-700 underline"
-              onClick={() =>
-                update({ adjustment: doc.adjustment ? null : { description: "", amount: 0 } })
+            <ErrorText
+              message={
+                exportAttempted
+                  ? validation.documentErrors.find((error) => error.field === "items")?.message
+                  : undefined
               }
-              type="button"
-            >
-              {doc.adjustment ? "조정 금액 사용 안 함" : "조정 금액 추가"}
-            </button>
+            />
+
+            <ItemsTable
+              items={doc.items}
+              removeItem={removeItem}
+              showErrors={exportAttempted}
+              updateItem={updateItem}
+              validation={validation}
+            />
           </section>
+
+          <AdjustmentFields
+            doc={doc}
+            showErrors={exportAttempted}
+            update={update}
+            validation={validation}
+          />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-          <section className="rounded border border-neutral-300 bg-white p-4">
-            <h2 className="text-sm font-bold">미리보기 합계</h2>
-            <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-neutral-600">상품 합계</dt>
-                <dd>{formatKrw(validation.subtotal)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-neutral-600">
-                  조정 {doc.adjustment ? `(${doc.adjustment.description || "설명 없음"})` : ""}
-                </dt>
-                <dd>{formatKrw(validation.adjustmentAmount)}</dd>
-              </div>
-              <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold">
-                <dt>견적 총액</dt>
-                <dd>{formatKrw(validation.total)}</dd>
-              </div>
-            </dl>
-            <ErrorText message={totalError} />
-            <p className="mt-2 text-xs text-neutral-500">
-              부가세는 자동 계산하지 않습니다. &lsquo;가격 조건&rsquo;에 세금 포함 여부를 적어 주세요.
-            </p>
-          </section>
+          <TotalsPanel doc={doc} showErrors={exportAttempted} validation={validation} />
 
           <section className="rounded border border-neutral-300 bg-white p-4">
             <h2 className="text-sm font-bold">내보내기</h2>
             <button
               className="mt-3 w-full rounded bg-neutral-900 px-3 py-2 text-sm font-semibold text-white"
-              onClick={downloadXlsx}
+              onClick={handleXlsx}
               type="button"
             >
               XLSX 다운로드
             </button>
             <button
               className="mt-2 w-full rounded border border-neutral-400 bg-white px-3 py-2 text-sm font-semibold"
-              onClick={openPrint}
+              onClick={handlePrint}
               type="button"
             >
               인쇄 화면 열기 (PDF로 저장)
@@ -655,15 +392,7 @@ export function QuoteDemo() {
             </p>
           </section>
 
-          <section className="rounded border border-neutral-300 bg-white p-4 text-xs text-neutral-600">
-            <h2 className="text-sm font-bold text-neutral-900">계산 기준</h2>
-            <p className="mt-2">행 금액 = 수량 × 단가</p>
-            <p>상품 합계 = 행 금액 합계</p>
-            <p>견적 총액 = 상품 합계 + 조정 금액 (0원 미만 불가)</p>
-            <p className="mt-2">
-              금액은 원 단위 정수로만 계산합니다. 화면·XLSX·PDF는 같은 문서 데이터를 사용합니다.
-            </p>
-          </section>
+          <CalculationNote />
         </aside>
       </div>
     </div>

@@ -27,6 +27,16 @@ export type SupplierInfo = {
   address: string;
 };
 
+/** 설정 화면에서 운영자가 바꾸기 전까지 쓰는 합성 공급자 정보. 실제 사업자 정보가 아니다. */
+export const DEFAULT_SUPPLIER: SupplierInfo = {
+  companyName: "(주)샘플공급",
+  businessNumber: "000-00-00000",
+  contactName: "홍샘플",
+  contactPhone: "02-0000-0000",
+  contactEmail: "sample@example.com",
+  address: "서울특별시 샘플구 샘플로 1",
+};
+
 export type QuoteAdjustment = {
   description: string;
   amount: number;

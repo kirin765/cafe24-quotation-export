@@ -155,7 +155,8 @@ QA.md                        구현 시작 때 작성할 수동 검증표
 
 - 구현: `/api/auth/install`(launch 검증 → OAuth), `/api/auth/callback`(코드 교환·세션), `/api/webhooks/cafe24`(90077/90078 → 토큰 삭제), `/api/cafe24/products`·`/api/cafe24/products/{no}/options`, `src/lib/{cafe24,launch,store,token}.ts`, `/demo`의 상품 선택기.
 - 문서로 확인한 사실: 상품 목록은 `GET /admin/products`, scope는 `mall.read_product`, `limit` 최대 100·`offset` 최대 5000, 호출 40/초(버킷), 공식 쿼터 3,000회/10분. 옵션은 `GET /admin/products/{product_no}/options`. API 버전은 릴리스 후 1년 유효(2026-09-01은 2027-09-01까지). 웹훅은 서명이 아니라 `X-API-Key` 고정 인증정보로 검증하며 payload는 `{ event_no, resource: { mall_id, ... } }`이다.
-- 남은 항목: 멀티쇼핑몰(`shop_no`) 구분이 실제로 필요한지 테스트몰에서 확인. 토큰 동시 refresh 잠금은 아직 없다(같은 몰에서 동시 요청이 겹치면 refresh가 중복될 수 있음).
+- 2차 구현(2026-09-16): 초안·확정 버전·설정을 Postgres에 저장했다. 견적 번호는 몰·날짜별 일련번호 `QYYYYMMDD-NNNN`, 저장은 revision으로 충돌을 감지하고 확정은 snapshot을 남긴다. `/quotes`·`/quotes/[id]`·`/quotes/versions/[id]/print`·`/settings` 화면과 API 7개를 추가했다. 삭제는 soft delete이고 확정본은 남는다.
+- 남은 항목: 멀티쇼핑몰(`shop_no`) 구분이 실제로 필요한지 테스트몰에서 확인. 토큰 동시 refresh 잠금은 아직 없다(같은 몰에서 동시 요청이 겹치면 refresh가 중복될 수 있음). 초안 자동 저장(autosave)과 견적서 로고는 미구현.
 - 검증: 단위·stub 테스트 67개, 프로덕션 빌드 HTTP 라우트 확인 20개, 미설치 브라우저 동작 확인. 실몰 설치·상품 조회는 **미검증**(자동 검증은 스텁)이라 테스트몰 설치가 다음 관문이다. 설치 한도(기본 5회)를 쓰므로 순서를 정해 한 번에 통과시켜야 한다.
 - 필요한 운영 설정: `CAFE24_CLIENT_ID`·`CAFE24_CLIENT_SECRET`·`CAFE24_REDIRECT_URI`·`CAFE24_WEBHOOK_API_KEY`·`DATABASE_URL`. 토큰 저장은 Neon 등 Postgres 무료 티어(추가 현금 0원)로 시작한다.
 
@@ -198,11 +199,11 @@ QA.md                        구현 시작 때 작성할 수동 검증표
 
 ### C. 연동 MVP
 
-- [x] OAuth·tenant DB·상품 검색/선택 구현. (토큰 DB·상품 검색/선택 완료, 견적 문서 저장은 미구현)
-- [ ] 초안 저장·확정 snapshot·복제·버전 충돌 처리.
-- [ ] 두 출력 adapter를 저장된 snapshot에 연결.
-- [ ] 권한·파일 생성·장문/다페이지·한글 출력 테스트.
-- [ ] 한 테스트몰에서 수동 설치/재접속/상품 선택/출력 검증.
+- [x] OAuth·tenant DB·상품 검색/선택 구현.
+- [x] 초안 저장·확정 snapshot·복제·버전 충돌 처리.
+- [x] 두 출력 adapter를 저장된 snapshot에 연결.
+- [x] 권한·파일 생성·장문/다페이지·한글 출력 테스트.
+- [ ] 한 테스트몰에서 수동 설치/재접속/상품 선택/출력 검증. (설치·토큰 저장은 2026-09-16 실몰에서 확인. 재접속 후 상품 선택·출력은 미확인)
 
 **완료 조건:** 한 몰의 실제 상품을 운영자가 확인한 단가로 내보내고, 다른 몰 접근 차단과 확정 문서 보존을 검증한다. 시간·현금 상한은 이 단계 시작 전에 별도로 기록한다.
 

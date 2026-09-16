@@ -1,14 +1,15 @@
 # QA — 로컬 데모
 
-- 작성일: 2026-09-16 (연동 MVP 검증 추가)
-- 대상: `/demo`, `/demo/print`, `/api/auth/*`, `/api/cafe24/*`, `/api/webhooks/cafe24`
-- 설치 한도 소모: **없음** (자동 검증은 모두 로컬/스텁이며 실제 몰에 설치하지 않음)
+- 작성일: 2026-09-16 (연동 MVP · 초안/확정 버전 검증 추가)
+- 대상: `/demo`, `/print`, `/quotes`, `/quotes/[id]`, `/quotes/versions/[id]/print`, `/settings`, `/api/*`
+- 설치 한도 소모: **없음** (자동 검증은 로컬·스텁·합성 몰 ID만 쓰고 끝나면 지움. 실제 몰 설치는 사용자가 1회 수행)
 
-문서는 세 종류로 검증했습니다.
+문서는 네 종류로 검증했습니다.
 
-1. **자동 테스트** — `npm test` (계산·CSV·XLSX·launch·OAuth·웹훅 67개), `npm run typecheck`, `npm run lint`, `npm run build`
+1. **자동 테스트** — `npm test` 67개, `npm run typecheck`, `npm run lint`, `npm run build`
 2. **브라우저 확인** — Playwright(Chromium)로 실제 편집·다운로드·인쇄 흐름 확인, PDF는 `pdftotext`/`pdfinfo`/`pdffonts`로 내용·페이지·폰트 확인
-3. **HTTP 라우트 확인** — 프로덕션 빌드를 띄우고 `/api/auth/install`·`/api/auth/callback`·`/api/cafe24/session`·`/api/cafe24/products`·`/api/webhooks/cafe24`에 직접 요청 (20개 확인)
+3. **HTTP 라우트 확인** — 프로덕션 빌드를 띄우고 API·페이지에 직접 요청 (OAuth/상품 20개, 초안/확정 40개)
+4. **DB 통합 테스트** — 실제 Neon Postgres에 저장·확정·복제·tenant 격리를 확인 (`DATABASE_URL=... npx vitest run src/features/quotes/server/repo.integration.test.ts`, 12개)
 
 ## 2차: 연동(OAuth·상품 조회) 검증
 
@@ -40,20 +41,43 @@
 | 43 | 콜백 state 불일치 | 400 + 사람이 읽는 안내(보안 검증 실패) | 통과 (HTTP) |
 | 44 | 미설치 브라우저의 `/demo` | "설치된 쇼핑몰 세션이 없어 CSV와 수동 입력만" 안내, 기존 계산 888,700원 유지, 콘솔 오류 없음 | 통과 (브라우저) |
 
+## 3차: 초안·확정 버전·설정 검증
+
+| # | 시나리오 | 기대값 | 결과 |
+|---|---|---|---|
+| 45 | 세션 없이 `/api/quotes`·`/quotes` | API 401, 페이지는 앱 실행 안내 | 통과 (HTTP) |
+| 46 | 샘플 초안 생성 | 201, 상품 10행, 문서번호 `QYYYYMMDD-NNNN`, 확정 전 v1 | 통과 (HTTP·브라우저) |
+| 47 | 목록 | 총액 888,700원, 수신처·문서번호 검색 동작, 없는 검색어는 0건 | 통과 (HTTP) |
+| 48 | 저장 | revision 1 → 2, 저장 후 미저장 배지 사라짐 | 통과 (HTTP·브라우저) |
+| 49 | 낡은 revision으로 저장 | 409 + 최신 내용 반환, 화면에 충돌 안내와 ‘최신 내용 불러오기’ | 통과 (HTTP·단위) |
+| 50 | 검증 실패 문서 저장 | 422, 화면은 오류 위치 표시 | 통과 (HTTP) |
+| 51 | 확정 | 200 v1, 확정 버전 목록에 v1 표시 | 통과 (HTTP·브라우저) |
+| 52 | 확정 시 낡은 revision | 409 | 통과 (HTTP) |
+| 53 | 확정 후 초안 수정 | 확정본 snapshot의 총액·수량이 바뀌지 않음 | 통과 (HTTP·브라우저·단위) |
+| 54 | 값이 어긋난 초안 확정 | `invalid`, 버전이 생기지 않음 | 통과 (단위·실제 DB) |
+| 55 | 복제 | 새 문서번호·새 초안, 확정 이력 없음, 상품 10행 | 통과 (HTTP·브라우저·단위) |
+| 56 | 삭제 | 목록에서 사라지고 404, 확정 버전 API는 동작 | 통과 (HTTP·브라우저) |
+| 57 | 이력 | created/updated/confirmed/duplicated/exported 기록, 수신처 본문 없음 | 통과 (HTTP·단위) |
+| 58 | 확정본 인쇄·XLSX | 확정 시점 내용·총액, 확정 후 수정이 반영되지 않음 | 통과 (브라우저) |
+| 59 | 다른 몰의 초안 조회·저장·확정·복제·버전 열람 | 모두 404/차단, 목록에도 안 보임, 페이지 404 | 통과 (HTTP·브라우저·단위) |
+| 60 | 공급자 설정 | 저장 후 새 초안에 반영, 확정본에는 소급되지 않음 | 통과 (HTTP·단위) |
+| 61 | 문서번호 동시 생성 | 몰·날짜별 일련번호로 겹치지 않음 | 통과 (단위·실제 DB) |
+| 62 | 없는 초안 ID | 저장·확정·삭제 모두 거부 | 통과 (단위·실제 DB) |
+
 ## 자동 테스트 실행 결과
 
 ```text
-npm test           67 passed (model 12, csv 9, xlsx 5, launch 9, cafe24 매핑 8,
-                              OAuth/상품 fetch 8, token 5, webhook 7 … )
+npm test           67 passed + 12 skipped (DATABASE_URL 없을 때 통합 테스트는 건너뜀)
+DB 통합 테스트      12/12 (실제 Neon, 합성 몰 ID 사용 후 정리)
 npm run typecheck  통과
 npm run lint       통과 (오류 0)
-npm run build      통과 (/ , /demo, /demo/print + API 라우트 7개)
-브라우저 확인       14/14, PDF 확인 8/8, 라우트 확인 20/20, 상품 선택기 3/3
+npm run build      통과 (정적 4개 + 동적 페이지·API 15개)
+브라우저 확인       14/14 (데모), PDF 8/8, 초안 흐름 23/23, 라우트 20/20 + 40/40
 ```
 
 ## 사람이 직접 확인해야 하는 항목
 
-- **실제 Cafe24 테스트몰에서 설치 → 실행 → 상품 검색 → 견적 출력** (plan.md C 완료 조건). 자동 검증은 스텁이라 실몰 동작·설치 한도 소모는 확인하지 않았습니다.
+- **실제 Cafe24 테스트몰에서 앱 재실행 → 상품 검색·추가 → 저장 → 확정 → 출력** (plan.md C 완료 조건). 설치(OAuth 토큰 저장)는 실몰에서 1회 확인했고, 그 이후의 상품 선택·출력은 아직 실몰에서 확인하지 않았습니다.
 - 실사용 운영자의 익명 품목표를 변환해 기존 Cafe24 기본 출력과 비교 (`plan.md` B 단계)
 - 인쇄 대화상자에서 실제 프린터/PDF 저장 동작(운영체제·브라우저별 여백)
 - 멀티쇼핑몰(`shop_no`) 상품 구분이 실제로 필요한지와 호출 제한 체감

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SUPPLIER,
   createDocumentNumber,
   createEmptyItem,
   type QuoteDocument,
@@ -7,14 +8,7 @@ import {
   type SupplierInfo,
 } from "@/features/quotes/model";
 
-export const SAMPLE_SUPPLIER: SupplierInfo = {
-  companyName: "(주)샘플공급",
-  businessNumber: "000-00-00000",
-  contactName: "홍샘플",
-  contactPhone: "02-0000-0000",
-  contactEmail: "sample@example.com",
-  address: "서울특별시 샘플구 샘플로 1",
-};
+export const SAMPLE_SUPPLIER: SupplierInfo = { ...DEFAULT_SUPPLIER };
 
 export const SAMPLE_ITEMS: QuoteItem[] = [
   { itemCode: "SAMPLE-001", productName: "샘플 타월", optionName: "화이트", quantity: 10, unitPrice: 5000 },
