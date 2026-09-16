@@ -24,6 +24,12 @@ export const SCOPES =
     .filter(Boolean)
     .join(",") || DEFAULT_SCOPES;
 
+/**
+ * 멀티쇼핑몰은 shop_no로 상품이 나뉜다. 기본 1(대표 몰)이며, 여러 몰을 쓰는 스토어는
+ * CAFE24_SHOP_NO로 지정한다. 아직 테스트몰에서 멀티몰 동작을 확인하지는 못했다.
+ */
+export const SHOP_NO = Number(process.env.CAFE24_SHOP_NO ?? "1") || 1;
+
 export const apiBase = (mallId: string) => `https://${mallId}.cafe24api.com/api/v2`;
 
 export function authorizeUrl(mallId: string, state: string): string {
@@ -173,6 +179,9 @@ export async function fetchProducts(
     offset: String(offset),
     fields: PRODUCT_FIELDS,
   });
+  if (SHOP_NO !== 1) {
+    query.set("shop_no", String(SHOP_NO));
+  }
   const keyword = options.keyword?.trim();
   if (keyword) {
     query.set("product_name", keyword);

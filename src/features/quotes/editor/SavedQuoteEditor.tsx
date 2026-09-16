@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createEmptyItem,
@@ -103,8 +103,36 @@ export function SavedQuoteEditor({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<SavedDraft | null>(null);
+  const [editSeq, setEditSeq] = useState(0);
+  const [autoSaved, setAutoSaved] = useState(0);
 
   const validation = useMemo(() => validateDocument(doc), [doc]);
+
+  /**
+   * 저장 시점에 최신 값이 필요하다. 자동 저장이 진행 중일 때 사용자가 저장을 누르면
+   * 앞선 저장을 기다린 뒤 최신 revision으로 다시 저장해야 하므로, 값은 ref로 읽는다.
+   */
+  const latest = useRef({ doc, revision, editSeq });
+  useEffect(() => {
+    latest.current = { doc, revision, editSeq };
+  }, [doc, revision, editSeq]);
+
+  const saveRef = useRef<(options?: { silent?: boolean }) => Promise<number | null>>(async () => null);
+  const inFlight = useRef<Promise<number | null> | null>(null);
+
+  /**
+   * 편집이 멈추면 자동 저장한다. 값이 어긋나면 저장하지 않고 오류만 보여준다.
+   * 충돌이 난 뒤에는 자동 저장을 멈춰 남의 저장을 계속 덮어쓰지 않게 한다.
+   */
+  useEffect(() => {
+    if (!dirty || conflict) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void saveRef.current({ silent: true });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [editSeq, dirty, conflict]);
 
   useEffect(() => {
     if (!dirty) {
@@ -121,6 +149,7 @@ export function SavedQuoteEditor({
   const change = (next: QuoteDocument) => {
     setDoc(next);
     setDirty(true);
+    setEditSeq((prev) => prev + 1);
     setMessage(null);
   };
 
@@ -183,9 +212,22 @@ export function SavedQuoteEditor({
     return true;
   };
 
-  const save = async (): Promise<number | null> => {
+  const performSave = async (silent: boolean): Promise<number | null> => {
+    const current = latest.current;
+    if (!silent && !validateDocument(current.doc).valid) {
+      setShowErrors(true);
+      setError("입력 오류를 수정한 뒤 저장하세요.");
+      return null;
+    }
+    if (silent && !validateDocument(current.doc).valid) {
+      setShowErrors(true);
+      setError("입력 오류가 있어 자동 저장하지 않았습니다. 고치면 자동으로 저장됩니다.");
+      return null;
+    }
+
     setBusy(true);
     setError(null);
+    const savedSeq = current.editSeq;
     try {
       const { res, body } = await requestJson<{
         ok?: boolean;
@@ -196,7 +238,7 @@ export function SavedQuoteEditor({
       }>(`/api/quotes/${initialDraft.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document: doc, revision }),
+        body: JSON.stringify({ document: current.doc, revision: current.revision }),
       });
       if (res.status === 409) {
         setConflict(body.current ?? null);
@@ -205,7 +247,7 @@ export function SavedQuoteEditor({
       }
       if (res.status === 422) {
         setShowErrors(true);
-        setError("입력 오류를 수정한 뒤 저장하세요.");
+        setError("입력 오류가 있어 저장하지 않았습니다. 고치면 자동으로 저장됩니다.");
         return null;
       }
       if (!res.ok || body.revision === undefined) {
@@ -213,8 +255,15 @@ export function SavedQuoteEditor({
         return null;
       }
       setRevision(body.revision);
-      setDirty(false);
-      setMessage(`저장했습니다. (revision ${body.revision})`);
+      if (latest.current.editSeq === savedSeq) {
+        setDirty(false);
+      }
+      if (silent) {
+        setAutoSaved((prev) => prev + 1);
+        setMessage(`자동 저장했습니다. (revision ${body.revision})`);
+      } else {
+        setMessage(`저장했습니다. (revision ${body.revision})`);
+      }
       return body.revision;
     } catch {
       setError("저장하지 못했습니다. 네트워크를 확인해 주세요.");
@@ -223,6 +272,25 @@ export function SavedQuoteEditor({
       setBusy(false);
     }
   };
+
+  const save = async (options: { silent?: boolean } = {}): Promise<number | null> => {
+    if (inFlight.current) {
+      await inFlight.current.catch(() => undefined);
+    }
+    const task = performSave(options.silent ?? false);
+    inFlight.current = task;
+    try {
+      return await task;
+    } finally {
+      if (inFlight.current === task) {
+        inFlight.current = null;
+      }
+    }
+  };
+
+  useEffect(() => {
+    saveRef.current = save;
+  });
 
   const saveIfDirty = async (): Promise<number | null> => (dirty ? await save() : revision);
 
@@ -349,7 +417,8 @@ export function SavedQuoteEditor({
           </h1>
           <p className="mt-1 text-xs text-neutral-600">
             마지막 저장 {formatDateTime(initialDraft.updatedAt)} · revision {revision} · 다음 확정 시
-            v{doc.version} · {doc.items.length}행
+            v{doc.version} · {doc.items.length}행 · 편집이 멈추면 자동 저장됩니다
+            {autoSaved > 0 ? ` · 자동 저장 ${autoSaved}회` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -406,7 +475,7 @@ export function SavedQuoteEditor({
         </span>
         {dirty ? (
           <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-800">
-            저장되지 않은 변경
+            {busy ? "저장 중…" : "자동 저장 대기"}
           </span>
         ) : null}
         {message ? <span className="text-neutral-800">{message}</span> : null}

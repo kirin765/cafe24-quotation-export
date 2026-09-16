@@ -55,6 +55,7 @@ npm run dev        # http://localhost:3000
 | `/quotes/[id]` | 초안 편집·저장·확정·복제·삭제, 확정 버전과 이력 |
 | `/quotes/versions/[versionId]/print` | 확정본 인쇄·XLSX(확정 시점 snapshot) |
 | `/settings` | 공급자 표시 정보(몰별) |
+| `/privacy` | 개인정보처리방침(수집·미수집·보관·파기) |
 | `/api/auth/install` | **App URL.** Cafe24가 앱 실행 시 호출. hmac·timestamp 검증 후 OAuth로 보냄 |
 | `/api/auth/callback` | **Redirect URI.** 인증 코드를 토큰으로 교환하고 세션 쿠키 발급 |
 | `/api/webhooks/cafe24` | 앱 삭제(90077)·만료(90078) 수신. 토큰 삭제 |
@@ -71,6 +72,7 @@ npm run dev        # http://localhost:3000
 ## 초안·확정 버전 규칙
 
 - 견적 번호는 몰·날짜별 일련번호 `QYYYYMMDD-NNNN`이고 (몰, 문서번호)가 유일합니다.
+- 편집이 1.5초 멈추면 자동 저장됩니다. 값이 어긋난 상태에서는 저장하지 않고 오류만 보여주며, 충돌이 난 뒤에는 자동 저장을 멈춥니다.
 - 초안은 자유롭게 저장됩니다. 저장할 때마다 `revision`이 1씩 올라가고, 다른 탭이 저장한 뒤 낡은 revision으로 저장하면 409로 막고 최신 내용을 함께 돌려줍니다. 늦은 저장이 새 내용을 덮어쓰지 않습니다.
 - **확정하면 그 시점의 문서 전체(공급자 정보·품목 이름·단가 포함)를 snapshot으로 저장합니다.** 확정본은 수정·삭제되지 않고, 다시 확정하면 새 버전이 쌓입니다. 카탈로그 가격이나 설정이 나중에 바뀌어도 확정본은 그대로입니다.
 - 서버가 저장 전에 문서를 다시 검증합니다(필수값·수량/단가 범위·총액 음수 금지). 클라이언트 검증을 우회한 요청도 거부합니다.
@@ -108,6 +110,7 @@ Cafe24 관리자 > 앱 실행
 | `CAFE24_WEBHOOK_API_KEY` | 예 | 개발자센터 WebHook 인증정보 값 |
 | `CAFE24_SCOPES` | 아니오 | 기본 `mall.read_product`. 개발자센터 권한관리와 반드시 일치 |
 | `CAFE24_API_VERSION` | 아니오 | 기본 `2026-09-01`(2027-09-01까지 유효) |
+| `CAFE24_SHOP_NO` | 아니오 | 기본 1. 멀티쇼핑몰이면 해당 `shop_no` 지정(실몰 검증은 미완) |
 | `DATABASE_URL` | 예(운영) | 토큰 저장용 Postgres. 없으면 메모리 저장소로 떨어져 서버리스에서 설치가 유지되지 않음 |
 
 ## 실행
@@ -182,6 +185,18 @@ QA.md                           수동 검증표와 자동 검증 결과
 - 상품·옵션 API는 세션이 없으면 401, 토큰이 없으면 409로 막고 `Cache-Control: no-store`로 응답합니다.
 - 고객·주문 데이터를 조회하지 않고 고객 식별자 권한을 요청하지 않습니다. 토큰은 Postgres에만 저장하고 로그에 남기지 않습니다.
 - `CAFE24_CLIENT_SECRET`은 서버 라우트에서만 읽습니다. 코드·커밋에 넣지 않습니다.
+
+## 스토어 등록 자료
+
+| 경로 | 내용 |
+|---|---|
+| `SUBMIT.md` | 심사 제출 절차·자기 시험·반려 사유 대응표 |
+| `store-assets/store-listing-copy.md` | 앱 이름·소개·상세 설명·연관검색어·이미지 목록 |
+| `store-assets/icon-512.png`, `icon-256.png`, `banner-740x416.png` | 아이콘·배너 |
+| `store-assets/screenshots/` | 앱 스크린샷(합성 데이터) |
+| `public/store/detail-01..05.png` | 심사용 상세 설명 이미지(1720px 디자인 PNG) |
+
+재생성: `node store-assets/render-detail-images.mjs`(서버 불필요), `node store-assets/render-screenshots.mjs`(앱 실행 필요)
 
 ## 배포
 
