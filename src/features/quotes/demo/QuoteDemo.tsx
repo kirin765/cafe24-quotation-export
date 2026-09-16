@@ -199,10 +199,10 @@ export function QuoteDemo() {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-300 pb-4">
         <div>
-          <h1 className="text-xl font-bold">견적서 데모</h1>
+          <h1 className="text-xl font-bold">견적서 화면 미리보기</h1>
           <p className="mt-1 text-xs text-neutral-600">
-            서버에 저장하지 않는 연습용 화면입니다. 편집한 내용은 이 브라우저 안에만 남습니다. 저장이
-            필요하면 Cafe24 관리자에서 앱을 실행해 견적 목록으로 들어가세요.
+            설치 없이 견적 편집 화면을 그대로 보실 수 있습니다. 여기서는 서버에 저장하지 않고 이 브라우저
+            안에만 남습니다. 견적 저장·확정 버전·이력은 Cafe24 관리자에서 앱을 실행하면 바로 쓸 수 있습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
