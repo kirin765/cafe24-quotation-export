@@ -56,8 +56,39 @@ const HEADER_ALIASES: Record<string, string> = {
   품목금액: "line_amount",
 };
 
+/**
+ * 실제 파일의 숫자 표기를 받아들인다. 카페24 상품 엑셀은 `5000.00`처럼 소수점 둘째 자리까지
+ * 내보내고, 사람이 손댄 파일에는 `5,000`처럼 천단위 쉼표가 들어간다. 소수 부분이 0이 아니면
+ * 조용히 반올림하지 않고 거부한다.
+ */
+function parseIntegerCell(raw: string): number | null {
+  const trimmed = raw.trim().replace(/[\s,]/g, "");
+  if (trimmed === "") {
+    return null;
+  }
+  const match = /^(\d+)(?:\.(0+))?$/.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+  const value = Number.parseInt(match[1], 10);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 const normalizeColumn = (value: string) =>
   value.replace(/^\uFEFF/, "").trim().toLowerCase().replace(/[\s_\-()]/g, "");
+
+/**
+ * 같은 뜻의 열이 여럿이면 이 순서로 고른다. 카페24 상품 엑셀에는 공급가(원가 성격)와
+ * 판매가가 함께 나오는데, 거래처에 보내는 견적의 출발점은 판매가가 맞다.
+ */
+const COLUMN_PREFERENCE: Record<string, string[]> = {
+  item_code: ["상품코드", "자체상품코드", "품목코드", "자체품목코드", "상품번호", "코드"],
+  product_name: ["상품명", "품목명", "품명", "품목", "제품명"],
+  option_name: ["옵션값", "옵션명", "옵션", "규격"],
+  quantity: ["수량", "주문수량"],
+  unit_price: ["판매가", "판매단가", "단가", "기준단가", "공급가", "공급단가"],
+  line_amount: ["공급가액", "금액", "품목금액", "합계"],
+};
 
 const CANONICAL_BY_NORMALIZED = new Map(
   CSV_COLUMNS.map((column) => [normalizeColumn(column), column] as const),
@@ -210,21 +241,31 @@ export function parseItemCsv(text: string): CsvParseResult {
   }
 
   const header = rows[0].map(normalizeHeader);
-  const columnIndex = new Map<string, number>();
+  const candidates = new Map<string, { index: number; raw: string; rank: number }[]>();
   const warnings: string[] = [];
-  const ignored: string[] = [];
 
   header.forEach((raw, index) => {
     const column = resolveColumn(raw);
     if (!column) {
       return;
     }
-    if (columnIndex.has(column)) {
-      ignored.push(`"${raw}" (${column} 열이 이미 있음)`);
-      return;
-    }
-    columnIndex.set(column, index);
+    const preference = COLUMN_PREFERENCE[column] ?? [];
+    const normalized = normalizeColumn(raw);
+    const rank = preference.indexOf(normalized);
+    const list = candidates.get(column) ?? [];
+    list.push({ index, raw, rank: rank === -1 ? Number.MAX_SAFE_INTEGER : rank });
+    candidates.set(column, list);
   });
+
+  const columnIndex = new Map<string, number>();
+  const ignored: string[] = [];
+  for (const [column, list] of candidates) {
+    const [chosen, ...rest] = [...list].sort((a, b) => a.rank - b.rank || a.index - b.index);
+    columnIndex.set(column, chosen.index);
+    for (const item of rest) {
+      ignored.push(`"${item.raw}" (${column}은 "${chosen.raw}" 사용)`);
+    }
+  }
 
   const hasUnitPrice = columnIndex.has("unit_price");
   const hasLineAmount = columnIndex.has("line_amount");
@@ -256,7 +297,7 @@ export function parseItemCsv(text: string): CsvParseResult {
     warnings.push("수량 열이 없어 모든 행의 수량을 1로 채웠습니다. 표에서 수정하세요.");
   }
   if (ignored.length > 0) {
-    warnings.push(`같은 뜻의 열이 여럿이라 앞의 열만 사용했습니다: ${ignored.join(", ")}`);
+    warnings.push(`같은 뜻의 열이 여럿이라 일부만 사용했습니다: ${ignored.join(", ")}`);
   }
 
   const dataRows = rows.slice(1);
@@ -315,11 +356,12 @@ export function parseItemCsv(text: string): CsvParseResult {
       pushError("option_name", `옵션명은 ${MAX_NAME_LENGTH}자 이하여야 합니다.`);
     }
 
+    const parsedQuantity = parseIntegerCell(quantityRaw);
     let quantity = 0;
-    if (!/^\d+$/.test(quantityRaw)) {
-      pushError("quantity", "수량은 1 이상의 정수여야 합니다. (빈 값·소수·음수 불가)");
+    if (parsedQuantity === null) {
+      pushError("quantity", "수량은 1 이상의 정수여야 합니다. (5,000·5000.00 형식은 허용)");
     } else {
-      quantity = Number.parseInt(quantityRaw, 10);
+      quantity = parsedQuantity;
       if (quantity < 1) {
         pushError("quantity", "수량은 1 이상이어야 합니다.");
       } else if (quantity > MAX_QUANTITY) {
@@ -330,11 +372,10 @@ export function parseItemCsv(text: string): CsvParseResult {
     let unitPrice = 0;
     if (!hasUnitPrice) {
       // 금액 열만 있는 견적서 양식: 수량으로 나누어떨어질 때만 단가로 환산한다(조용한 반올림 금지).
-      const amountRaw = value("line_amount");
-      if (!/^\d+$/.test(amountRaw)) {
+      const amount = parseIntegerCell(value("line_amount"));
+      if (amount === null) {
         pushError("line_amount", "금액은 0 이상의 정수(원)여야 합니다.");
-      } else if (/^\d+$/.test(quantityRaw) && quantity > 0) {
-        const amount = Number.parseInt(amountRaw, 10);
+      } else if (quantity > 0) {
         if (amount % quantity !== 0) {
           pushError(
             "line_amount",
@@ -350,12 +391,18 @@ export function parseItemCsv(text: string): CsvParseResult {
           }
         }
       }
-    } else if (!/^\d+$/.test(unitPriceRaw)) {
-      pushError("unit_price", "단가는 0 이상의 정수(원)여야 합니다. (소수·쉼표·통화기호 불가)");
     } else {
-      unitPrice = Number.parseInt(unitPriceRaw, 10);
-      if (unitPrice > MAX_UNIT_PRICE) {
-        pushError("unit_price", `단가는 ${MAX_UNIT_PRICE.toLocaleString("ko-KR")}원 이하여야 합니다.`);
+      const parsedPrice = parseIntegerCell(unitPriceRaw);
+      if (parsedPrice === null) {
+        pushError("unit_price", "단가는 0 이상의 정수(원)여야 합니다. (5,000·5000.00 형식은 허용)");
+      } else {
+        unitPrice = parsedPrice;
+        if (unitPrice > MAX_UNIT_PRICE) {
+          pushError(
+            "unit_price",
+            `단가는 ${MAX_UNIT_PRICE.toLocaleString("ko-KR")}원 이하여야 합니다.`,
+          );
+        }
       }
     }
 

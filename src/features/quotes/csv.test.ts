@@ -52,7 +52,7 @@ describe("품목 CSV 가져오기", () => {
     const result = parseItemCsv(`product_name,product_name,quantity,unit_price\n가,나,1,1000\n`);
     expect(result.headerError).toBeNull();
     expect(result.items[0].productName).toBe("가");
-    expect(result.warnings.join(" ")).toContain("앞의 열만 사용");
+    expect(result.warnings.join(" ")).toContain("일부만 사용");
   });
 
   it("수량 열이 없으면 1로 채우고 경고한다(카페24 상품 목록 양식)", () => {
@@ -91,9 +91,9 @@ describe("품목 CSV 가져오기", () => {
   });
 
   it("카페24 상품 목록 양식(상품코드·상품명·공급가·판매가·옵션)을 읽는다", () => {
-    const result = parseItemCsv(`${"상품코드,상품명,공급가,판매가,옵션사용,옵션,진열상태"}
-P0000101,샘플 타월,3500,5000,T,화이트,T
-P0000101,샘플 타월,3500,5000,T,네이비,T`);
+    const result = parseItemCsv(`상품코드,상품명,공급가,판매가,옵션,진열상태
+P0000101,샘플 타월,3500.00,5000.00,화이트,T
+P0000101,샘플 타월,3500.00,5000.00,네이비,T`);
     expect(result.headerError).toBeNull();
     expect(result.errors).toHaveLength(0);
     expect(result.items).toHaveLength(2);
@@ -102,7 +102,7 @@ P0000101,샘플 타월,3500,5000,T,네이비,T`);
       productName: "샘플 타월",
       optionName: "화이트",
       quantity: 1,
-      unitPrice: 3500,
+      unitPrice: 5000,
     });
   });
 
@@ -140,7 +140,28 @@ P0000101,샘플 타월,3500,5000,T,네이비,T`);
 샘플 타월,무시됨,2,1000`);
     expect(result.headerError).toBeNull();
     expect(result.items[0].productName).toBe("샘플 타월");
-    expect(result.warnings.join(" ")).toContain("앞의 열만 사용");
+    expect(result.warnings.join(" ")).toContain("일부만 사용");
+  });
+
+  it("소수점 표기(5000.00)와 천단위 쉼표(5,000)를 읽는다", () => {
+    const result = parseItemCsv(`상품명,수량,판매가\n샘플 타월,10,5000.00\n샘플 컵,"1,200",3000.00\n`);
+    expect(result.headerError).toBeNull();
+    expect(result.errors).toHaveLength(0);
+    expect(result.items[0]).toMatchObject({ quantity: 10, unitPrice: 5000 });
+    expect(result.items[1]).toMatchObject({ quantity: 1200, unitPrice: 3000 });
+  });
+
+  it("소수 부분이 0이 아니면 조용히 반올림하지 않고 거부한다", () => {
+    const result = parseItemCsv(`상품명,수량,판매가\n샘플 타월,10,5000.50\n`);
+    expect(result.items).toHaveLength(0);
+    expect(result.errors[0]?.column).toBe("unit_price");
+  });
+
+  it("공급가와 판매가가 함께 있으면 판매가를 쓴다(카페24 상품 엑셀)", () => {
+    const result = parseItemCsv(`상품코드,상품명,공급가,판매가\nP0000101,샘플 타월,3500.00,5000.00\n`);
+    expect(result.headerError).toBeNull();
+    expect(result.items[0].unitPrice).toBe(5000);
+    expect(result.warnings.join(" ")).toContain('unit_price은 "판매가" 사용');
   });
 
   it("빈 파일과 헤더만 있는 파일을 구분한다", () => {

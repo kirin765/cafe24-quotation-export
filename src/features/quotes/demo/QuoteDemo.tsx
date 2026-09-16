@@ -16,6 +16,7 @@ import { createEmptyDocument, createSampleDocument } from "@/fixtures/samples";
 import { ProductPicker } from "@/features/quotes/editor/ProductPicker";
 import { DocumentFields, ErrorText, inputClass } from "@/features/quotes/editor/DocumentFields";
 import { ItemsTable } from "@/features/quotes/editor/ItemsTable";
+import { mergeImportedItems } from "@/features/quotes/editor/items";
 import {
   AdjustmentFields,
   CalculationNote,
@@ -116,10 +117,15 @@ export function QuoteDemo() {
   };
 
   const applyImport = (items: QuoteItem[], source: string, dataRowCount: number) => {
-    setDoc((prev) => ({ ...prev, items: [...prev.items, ...items] }));
+    const merged = mergeImportedItems(doc.items, items);
+    setDoc((prev) => ({ ...prev, items: merged.items }));
     setPendingImport(null);
     setImportHeaderError(null);
-    setStatusMessage(`${source}에서 ${items.length}행을 가져왔습니다. (데이터 ${dataRowCount}행)`);
+    setStatusMessage(
+      `${source}에서 ${items.length}행을 가져왔습니다.${
+        merged.replacedBlanks ? " 비어 있던 행은 대체했습니다." : ""
+      } (데이터 ${dataRowCount}행)`,
+    );
   };
 
   const confirmPartialImport = () => {

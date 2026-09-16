@@ -15,16 +15,12 @@ describe("실제 형식 예시 파일", () => {
     const result = parseItemCsv(read("cafe24-product-export.csv"));
     expect(result.headerError).toBeNull();
     expect(result.errors).toHaveLength(0);
-    expect(result.items).toHaveLength(5);
-    expect(result.items.map((item) => item.itemCode)).toEqual([
-      "P0000101",
-      "P0000101",
-      "P0000102",
-      "P0000103",
-      "P0000104",
-    ]);
-    expect(result.items[0].unitPrice).toBe(3500);
-    expect(result.items.filter((item) => item.optionName === "").length).toBe(1);
+    expect(result.items).toHaveLength(3);
+    expect(result.items.map((item) => item.itemCode)).toEqual(["P0000101", "P0000102", "P0000103"]);
+    // 소수점 표기(5000.00)를 정수로 읽고, 공급가(3500)가 아니라 판매가(5000)를 쓴다
+    expect(result.items[0].unitPrice).toBe(5000);
+    expect(result.warnings.join(" ")).toContain('unit_price은 "판매가" 사용');
+    expect(result.warnings.join(" ")).toContain("수량을 1로");
   });
 
   it("일반 견적서 양식", () => {
