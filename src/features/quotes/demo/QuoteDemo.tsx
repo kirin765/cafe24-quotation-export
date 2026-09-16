@@ -34,6 +34,7 @@ export function QuoteDemo() {
   const [exportAttempted, setExportAttempted] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importHeaderError, setImportHeaderError] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [showSupplier, setShowSupplier] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -93,6 +94,7 @@ export function QuoteDemo() {
   const handleCsvText = (text: string, source: string) => {
     const result = parseItemCsv(text);
     setImportHeaderError(result.headerError);
+    setImportWarnings(result.warnings);
     setStatusMessage(null);
 
     if (result.headerError) {
@@ -269,6 +271,25 @@ export function QuoteDemo() {
               열: item_code, product_name, option_name, quantity, unit_price · 최대 1MB ·{" "}
               {MAX_CSV_ROWS}행 · 품목 코드의 앞자리 0은 그대로 유지됩니다.
             </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              실제 파일의 열 이름도 인식합니다: 상품코드·상품명·공급가·판매가·옵션(카페24 상품 목록 양식),
+              품목·품명·규격·수량·단가·공급가액·세액(일반 견적서 양식). 수량 열이 없으면 1로 채우고,
+              단가 없이 금액만 있으면 금액 ÷ 수량으로 계산합니다.
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              예시 파일:{" "}
+              <a className="underline" href="/examples/cafe24-product-export.csv" download>
+                카페24 상품 목록 양식
+              </a>
+              {" · "}
+              <a className="underline" href="/examples/quote-standard.csv" download>
+                일반 견적서 양식
+              </a>
+              {" · "}
+              <a className="underline" href="/examples/quote-amount-only.csv" download>
+                금액만 있는 양식
+              </a>
+            </p>
 
             {pasteOpen ? (
               <div className="mt-3">
@@ -293,6 +314,13 @@ export function QuoteDemo() {
               <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
                 CSV를 가져오지 않았습니다. {importHeaderError}
               </p>
+            ) : null}
+            {importWarnings.length > 0 && !importHeaderError ? (
+              <ul className="mt-3 space-y-1 rounded bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
+                {importWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
             ) : null}
 
             {pendingImport ? (

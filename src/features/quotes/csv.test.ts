@@ -42,15 +42,25 @@ describe("품목 CSV 가져오기", () => {
     expect(result.items[0].itemCode).toBe("000123");
   });
 
-  it("필수 열이 없으면 아무 행도 가져오지 않는다", () => {
+  it("단가·금액 열이 없으면 아무 행도 가져오지 않는다", () => {
     const result = parseItemCsv(`item_code,product_name,option_name\nA,상품,옵션\n`);
-    expect(result.headerError).toContain("quantity");
+    expect(result.headerError).toMatch(/필수 열이 없습니다: unit_price/);
     expect(result.items).toHaveLength(0);
   });
 
-  it("중복 헤더를 거부한다", () => {
+  it("같은 뜻의 열이 중복되면 앞의 열을 쓰고 경고한다", () => {
     const result = parseItemCsv(`product_name,product_name,quantity,unit_price\n가,나,1,1000\n`);
-    expect(result.headerError).toContain("중복");
+    expect(result.headerError).toBeNull();
+    expect(result.items[0].productName).toBe("가");
+    expect(result.warnings.join(" ")).toContain("앞의 열만 사용");
+  });
+
+  it("수량 열이 없으면 1로 채우고 경고한다(카페24 상품 목록 양식)", () => {
+    const result = parseItemCsv(`상품코드,상품명,판매가\nP0000101,샘플 타월,5000\n`);
+    expect(result.headerError).toBeNull();
+    expect(result.errors).toHaveLength(0);
+    expect(result.items[0]).toMatchObject({ quantity: 1, unitPrice: 5000 });
+    expect(result.warnings.join(" ")).toContain("수량을 1로");
   });
 
   it("행별 오류를 줄 번호와 함께 모으고 유효 행만 통과시킨다", () => {
@@ -78,6 +88,59 @@ describe("품목 CSV 가져오기", () => {
     const result = parseItemCsv(rows.join("\n"));
     expect(result.headerError).toContain(`${MAX_CSV_ROWS}행`);
     expect(result.items).toHaveLength(0);
+  });
+
+  it("카페24 상품 목록 양식(상품코드·상품명·공급가·판매가·옵션)을 읽는다", () => {
+    const result = parseItemCsv(`${"상품코드,상품명,공급가,판매가,옵션사용,옵션,진열상태"}
+P0000101,샘플 타월,3500,5000,T,화이트,T
+P0000101,샘플 타월,3500,5000,T,네이비,T`);
+    expect(result.headerError).toBeNull();
+    expect(result.errors).toHaveLength(0);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      itemCode: "P0000101",
+      productName: "샘플 타월",
+      optionName: "화이트",
+      quantity: 1,
+      unitPrice: 3500,
+    });
+  });
+
+  it("일반 견적서 양식(품목·규격·수량·단가·공급가액·세액)을 읽고 세액은 무시한다", () => {
+    const result = parseItemCsv(`품목,규격,수량,단가,공급가액,세액,비고
+샘플 타월,화이트,10,5000,50000,5000,`);
+    expect(result.headerError).toBeNull();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      productName: "샘플 타월",
+      optionName: "화이트",
+      quantity: 10,
+      unitPrice: 5000,
+    });
+  });
+
+  it("단가 열이 없으면 금액 ÷ 수량으로 단가를 계산하고 경고를 남긴다", () => {
+    const result = parseItemCsv(`품명,규격,수량,공급가액
+샘플 타월,화이트,10,50000`);
+    expect(result.headerError).toBeNull();
+    expect(result.items[0].unitPrice).toBe(5000);
+    expect(result.warnings.join(" ")).toContain("금액 ÷ 수량");
+  });
+
+  it("금액이 수량으로 나누어떨어지지 않으면 조용히 반올림하지 않고 행 오류로 막는다", () => {
+    const result = parseItemCsv(`품명,규격,수량,공급가액
+샘플 타월,화이트,3,10000`);
+    expect(result.items).toHaveLength(0);
+    expect(result.errors[0]?.column).toBe("line_amount");
+    expect(result.errors[0]?.message).toContain("나누어떨어지지");
+  });
+
+  it("같은 뜻의 열이 여럿이면 앞의 열을 쓰고 경고로 알린다", () => {
+    const result = parseItemCsv(`상품명,품명,수량,단가
+샘플 타월,무시됨,2,1000`);
+    expect(result.headerError).toBeNull();
+    expect(result.items[0].productName).toBe("샘플 타월");
+    expect(result.warnings.join(" ")).toContain("앞의 열만 사용");
   });
 
   it("빈 파일과 헤더만 있는 파일을 구분한다", () => {

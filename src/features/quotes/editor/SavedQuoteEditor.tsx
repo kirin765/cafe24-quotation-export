@@ -99,6 +99,7 @@ export function SavedQuoteEditor({
   const [pasteText, setPasteText] = useState("");
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importHeaderError, setImportHeaderError] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -172,6 +173,7 @@ export function SavedQuoteEditor({
   const handleCsvText = (text: string, source: string) => {
     const result = parseItemCsv(text);
     setImportHeaderError(result.headerError);
+    setImportWarnings(result.warnings);
     setMessage(null);
     if (result.headerError) {
       setPendingImport(null);
@@ -543,6 +545,11 @@ export function SavedQuoteEditor({
             <p className="mt-2 text-xs text-neutral-500">
               열: item_code, product_name, option_name, quantity, unit_price · 최대 {MAX_CSV_ROWS}행
             </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              실제 파일의 열 이름도 인식합니다: 상품코드·상품명·공급가·판매가·옵션(카페24 상품 목록 양식),
+              품목·품명·규격·수량·단가·공급가액·세액(일반 견적서 양식). 수량 열이 없으면 1로 채우고,
+              단가 없이 금액만 있으면 금액 ÷ 수량으로 계산합니다.
+            </p>
 
             {pasteOpen ? (
               <div className="mt-3">
@@ -567,6 +574,13 @@ export function SavedQuoteEditor({
               <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
                 CSV를 가져오지 않았습니다. {importHeaderError}
               </p>
+            ) : null}
+            {importWarnings.length > 0 && !importHeaderError ? (
+              <ul className="mt-3 space-y-1 rounded bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
+                {importWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
             ) : null}
 
             {pendingImport ? (
